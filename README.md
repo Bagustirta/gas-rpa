@@ -49,21 +49,14 @@ Sistem ini terbagi menjadi dua bagian utama yang berkomunikasi secara aman melal
 
 ---
 
-## Alur Kerja Sistem (System Workflow)
+## Alur Kerja Sistem
 
-```mermaid
-graph TD
-    A[Laravel Admin Panel] -->|1. Create Sync Job| B(Database Queue)
-    C[RPA Node.js Bot] -->|2. Get Pending Job| A
-    C -->|3. Get Pangkalan List| A
-    C -->|4. Get Transactions Per Pangkalan| A
-    C -->|5. Open Puppeteer Browser| D[Portal MAP Pertamina]
-    D -->|6. User Login & Captcha Solve| C
-    C -->|7. Automatic Input NIK & Qty| D
-    D -->|8. Return Status Success/Fail/Limit| C
-    C -->|9. Send Live Audit Status via Reverb| A
-    C -->|10. Update Transaction Status| A
-```
+Sistem sinkronisasi bekerja melalui alur sebagai berikut:
+
+1. **Membuat Antrean Pekerjaan**: Pengguna memicu sinkronisasi dari Dashboard Laravel, yang akan membuat antrean pekerjaan (*Sync Job*) di database.
+2. **Mengambil Data Antrean**: Bot Node.js mengambil data transaksi siap lapor dan akun pangkalan dari API Laravel secara berkala.
+3. **Otomatisasi Input**: Bot membuka browser via Puppeteer, membantu pengguna masuk ke portal MyPertamina, lalu mengisi NIK dan jumlah tabung transaksi secara otomatis.
+4. **Update Status Real-Time**: Hasil akhir transaksi dilaporkan kembali ke API Laravel untuk memperbarui database dan memancarkan progres audit secara live ke browser admin menggunakan WebSockets (Laravel Reverb).
 
 ---
 
