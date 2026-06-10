@@ -1,8 +1,4 @@
-# 🤖 GAS-RPA: Automated LPG 3Kg Distribution Sync System
-
-<p align="center">
-  <img src="public/readme-assets/dashboard.png" width="800" alt="GAS-RPA Dashboard Mockup" style="border-radius: 8px; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);">
-</p>
+# GAS-RPA: Automated LPG 3Kg Distribution Sync System
 
 <p align="center">
   <img src="https://img.shields.io/badge/Laravel-FF2D20?style=for-the-badge&logo=laravel&logoColor=white" alt="Laravel">
@@ -14,7 +10,7 @@
 
 ---
 
-## 📝 Deskripsi Proyek
+## Deskripsi Proyek
 
 **GAS-RPA** adalah platform otomasi dan sinkronisasi distribusi LPG 3 Kg bersubsidi terintegrasi. Sistem ini menghubungkan database transaksi lokal (POS) Anda dengan portal resmi **MAP MyPertamina** secara otomatis menggunakan robot RPA (Robotic Process Automation). 
 
@@ -22,7 +18,7 @@ Dengan sistem ini, pemilik pangkalan atau sub-penyalur dapat menghemat waktu pel
 
 ---
 
-## 🛠️ Tech Stack & Arsitektur
+## Tech Stack & Arsitektur
 
 Sistem ini terbagi menjadi dua bagian utama yang berkomunikasi secara aman melalui REST API:
 
@@ -41,7 +37,7 @@ Sistem ini terbagi menjadi dua bagian utama yang berkomunikasi secara aman melal
 
 ---
 
-## 🚀 Fitur Utama
+## Fitur Utama
 
 -   **Otomasi Login Berantai (Multi-Account):** Bot dapat melakukan login berturut-turut ke berbagai akun pangkalan terdaftar secara otomatis tanpa intervensi berulang.
 -   **Smart Transaction Queue:** Sistem secara cerdas menyaring NIK yang belum dilaporkan atau berstatus gagal untuk diproses kembali.
@@ -53,7 +49,7 @@ Sistem ini terbagi menjadi dua bagian utama yang berkomunikasi secara aman melal
 
 ---
 
-## 📊 Alur Kerja Sistem (System Workflow)
+## Alur Kerja Sistem (System Workflow)
 
 ```mermaid
 graph TD
@@ -71,9 +67,9 @@ graph TD
 
 ---
 
-## ⚙️ Langkah Instalasi & Pengaturan
+## Langkah Instalasi & Pengaturan
 
-### 🖥️ 1. Setup Backend (Laravel)
+### 1. Setup Backend (Laravel)
 1. Masuk ke folder root project:
    ```bash
    cd d:\laragon\www\gas
@@ -100,7 +96,7 @@ graph TD
    php artisan serve
    ```
 
-### 🤖 2. Setup RPA Bot (Node.js)
+### 2. Setup RPA Bot (Node.js)
 1. Masuk ke folder bot:
    ```bash
    cd d:\laragon\www\gas\rpa-bot
@@ -124,6 +120,6 @@ graph TD
 
 ---
 
-## 🔒 Lisensi
+## Lisensi
 
 Proyek ini menggunakan lisensi **MIT License**. Anda bebas menggunakan, memodifikasi, dan mendistribusikannya kembali.
