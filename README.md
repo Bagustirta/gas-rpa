@@ -1,66 +1,129 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 🤖 GAS-RPA: Automated LPG 3Kg Distribution Sync System
 
 <p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
+  <img src="public/readme-assets/dashboard.png" width="800" alt="GAS-RPA Dashboard Mockup" style="border-radius: 8px; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);">
 </p>
 
-## About Laravel
+<p align="center">
+  <img src="https://img.shields.io/badge/Laravel-FF2D20?style=for-the-badge&logo=laravel&logoColor=white" alt="Laravel">
+  <img src="https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Node.js">
+  <img src="https://img.shields.io/badge/Puppeteer-40B5A4?style=for-the-badge&logo=puppeteer&logoColor=white" alt="Puppeteer">
+  <img src="https://img.shields.io/badge/Filament_PHP-EBB30A?style=for-the-badge&logo=laravel&logoColor=black" alt="Filament PHP">
+  <img src="https://img.shields.io/badge/WebSockets-Reverb-blue?style=for-the-badge" alt="WebSockets">
+</p>
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## 📝 Deskripsi Proyek
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+**GAS-RPA** adalah platform otomasi dan sinkronisasi distribusi LPG 3 Kg bersubsidi terintegrasi. Sistem ini menghubungkan database transaksi lokal (POS) Anda dengan portal resmi **MAP MyPertamina** secara otomatis menggunakan robot RPA (Robotic Process Automation). 
 
-## Learning Laravel
+Dengan sistem ini, pemilik pangkalan atau sub-penyalur dapat menghemat waktu pelaporan harian dari berjam-jam menjadi hanya beberapa klik saja, mengurangi risiko kesalahan input manusia (*human error*), serta memantau progres pelaporan secara real-time.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+---
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+## 🛠️ Tech Stack & Arsitektur
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Sistem ini terbagi menjadi dua bagian utama yang berkomunikasi secara aman melalui REST API:
 
-## Laravel Sponsors
+### 1. Backend & Dashboard Panel (Laravel)
+*   **Framework:** Laravel 11
+*   **Admin Panel:** Filament PHP (Sleek, responsive, dan mudah digunakan)
+*   **Database:** MySQL / MariaDB (Untuk menyimpan data pelanggan, riwayat transaksi, dan antrean sinkronisasi)
+*   **Real-time Broadcast:** Laravel Reverb (WebSocket server bawaan Laravel untuk memancarkan progres audit/lapor secara langsung ke browser pengguna)
+*   **Authentication:** API Key secure header token validation.
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### 2. RPA Automation Bot (Node.js)
+*   **Runtime:** Node.js v18+
+*   **Automation Engine:** Puppeteer (Mengontrol browser Google Chrome untuk mensimulasikan pengetikan, navigasi, dan klik layaknya manusia)
+*   **HTTP Client:** Axios (Mengambil data antrean NIK siap lapor dan mengirimkan status laporan balik ke Laravel)
+*   **Keamanan & Anti-Detection:** Dilengkapi fitur ketik dengan delay acak, pembersih state input React, serta deteksi otomatis Captcha keamanan untuk intervensi manual pengguna.
 
-### Premium Partners
+---
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+## 🚀 Fitur Utama
 
-## Contributing
+-   **Otomasi Login Berantai (Multi-Account):** Bot dapat melakukan login berturut-turut ke berbagai akun pangkalan terdaftar secara otomatis tanpa intervensi berulang.
+-   **Smart Transaction Queue:** Sistem secara cerdas menyaring NIK yang belum dilaporkan atau berstatus gagal untuk diproses kembali.
+-   **Deteksi Otomatis & Recovery:**
+    -   *Stok Kosong:* Otomatis mendeteksi jika stok di portal MyPertamina habis, mengirim sinyal ke Laravel, dan memproses akun pangkalan berikutnya.
+    -   *Batas Kuota Bulanan (Limit):* Mendeteksi jika NIK pelanggan telah melampaui limit pembelian nasional (kuota 4/4 habis) dan menandainya secara tepat di database.
+    -   *NIK Tidak Valid/Meninggal:* Otomatis mendeteksi error dari portal Pertamina (salah format, pelanggan meninggal, NIB kurang) dan menonaktifkan status aktif pelanggan tersebut secara otomatis di database lokal.
+-   **Live Monitoring Dashboard:** Progres bot saat mengetik, mencari NIK, memproses kuota, hingga CAPTCHA dapat dipantau langsung dari dashboard Laravel menggunakan WebSockets.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+---
 
-## Code of Conduct
+## 📊 Alur Kerja Sistem (System Workflow)
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```mermaid
+graph TD
+    A[Laravel Admin Panel] -->|1. Create Sync Job| B(Database Queue)
+    C[RPA Node.js Bot] -->|2. Get Pending Job| A
+    C -->|3. Get Pangkalan List| A
+    C -->|4. Get Transactions Per Pangkalan| A
+    C -->|5. Open Puppeteer Browser| D[Portal MAP Pertamina]
+    D -->|6. User Login & Captcha Solve| C
+    C -->|7. Automatic Input NIK & Qty| D
+    D -->|8. Return Status Success/Fail/Limit| C
+    C -->|9. Send Live Audit Status via Reverb| A
+    C -->|10. Update Transaction Status| A
+```
 
-## Security Vulnerabilities
+---
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## ⚙️ Langkah Instalasi & Pengaturan
 
-## License
+### 🖥️ 1. Setup Backend (Laravel)
+1. Masuk ke folder root project:
+   ```bash
+   cd d:\laragon\www\gas
+   ```
+2. Pasang dependensi composer:
+   ```bash
+   composer install
+   ```
+3. Konfigurasi file `.env`:
+   ```bash
+   copy .env.example .env
+   ```
+   Sesuaikan `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, dan konfigurasi `REVERB_*` untuk WebSocket. Jangan lupa isi `LPG_API_KEY` untuk token keamanan bot.
+4. Jalankan migrasi database:
+   ```bash
+   php artisan migrate
+   ```
+5. Buat user admin Filament:
+   ```bash
+   php artisan make:filament-user
+   ```
+6. Jalankan server lokal:
+   ```bash
+   php artisan serve
+   ```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+### 🤖 2. Setup RPA Bot (Node.js)
+1. Masuk ke folder bot:
+   ```bash
+   cd d:\laragon\www\gas\rpa-bot
+   ```
+2. Pasang dependensi node modules:
+   ```bash
+   npm install
+   ```
+3. Konfigurasi file `.env` untuk bot:
+   ```bash
+   copy .env.example .env
+   ```
+   Buka file `.env` dan sesuaikan:
+   *   `LARAVEL_APP_URL` (contoh: `http://localhost:8000`)
+   *   `LPG_API_KEY` (harus sama dengan yang di Laravel)
+   *   `PERTAMINA_PORTAL_URL` (`https://subsiditepat.mypertamina.id/LPG`)
+4. Jalankan bot:
+   ```bash
+   npm start
+   ```
+
+---
+
+## 🔒 Lisensi
+
+Proyek ini menggunakan lisensi **MIT License**. Anda bebas menggunakan, memodifikasi, dan mendistribusikannya kembali.
