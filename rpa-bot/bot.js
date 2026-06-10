@@ -207,9 +207,19 @@ async function run() {
             const transactions = trxResponse.data.data;
 
             if (transactions.length === 0) {
-                console.log('✓ Semua transaksi sudah berhasil dilaporkan!');
-                completedSuccessfully = true;
-                break;
+                console.log(`✓ Tidak ada transaksi pending untuk pangkalan: ${pangkalan.nama_pangkalan}`);
+                
+                // Cek apakah masih ada transaksi untuk pangkalan lain
+                const checkUrl = (syncJob && syncJob.user_id) ? `/api/nik-siap-lapor/detail?user_id=${syncJob.user_id}` : '/api/nik-siap-lapor/detail';
+                const trxCheck = await api.get(checkUrl);
+                if (trxCheck.data.data.length === 0) {
+                    console.log('✓ Semua transaksi selesai dilaporkan!');
+                    completedSuccessfully = true;
+                    break;
+                } else {
+                    console.log('Mengalihkan ke pangkalan berikutnya...');
+                    continue;
+                }
             }
 
             console.log(`Sisa transaksi siap lapor: ${transactions.length} baris.`);
@@ -847,7 +857,47 @@ async function run() {
 
                 } catch (err) {
                     console.error(`✗ Gagal memproses NIK ${trx.nik}:`, err.message);
-                    
+
+                    // --- RECOVERY: Cek apakah dipental ke halaman login ---
+                    let isLoginPage = false;
+                    try {
+                        isLoginPage = await page.evaluate(() => {
+                            const inputs = Array.from(document.querySelectorAll('input'));
+                            const hasPassword = inputs.some(input => (input.getAttribute('type') || '').toLowerCase() === 'password');
+                            const txt = document.body.textContent.toLowerCase();
+                            const hasLoginText = txt.includes('masuk ke akun') || txt.includes('selamat datang');
+                            return hasPassword || hasLoginText;
+                        });
+                        if (!isLoginPage && page.url().includes('login')) {
+                            isLoginPage = true;
+                        }
+                    } catch (e) {}
+
+                    if (isLoginPage) {
+                        console.log('⚠️ Peringatan: Sesi telah berakhir (dipental ke halaman login).');
+                        console.log('🔄 Memulai ulang browser untuk pangkalan ini agar dapat login kembali...');
+                        // Kurangi pIdx agar outer loop memproses pangkalan ini kembali
+                        pIdx--;
+                        // Break loop transaksi pangkalan ini TANPA menandai NIK ini gagal
+                        break;
+                    }
+
+                    // --- RECOVERY: Cek ulang jika timeout/tidak merespon ---
+                    if (err.message.includes('timeout') || err.message.includes('merespon')) {
+                        trx.retryCount = (trx.retryCount || 0) + 1;
+                        if (trx.retryCount <= 2) {
+                            console.log(`⚠️ Terjadi kendala jaringan/timeout. Mengulang NIK ini (Percobaan ${trx.retryCount}/2)...`);
+                            try {
+                                await page.goto(PERTAMINA_URL, { waitUntil: 'domcontentloaded' });
+                                await sleep(3000);
+                            } catch (e) {}
+                            i--; // Mundurkan index i agar memproses NIK yang sama di iterasi berikutnya
+                            continue;
+                        } else {
+                            console.log('❌ Gagal memproses setelah 2 kali percobaan ulang.');
+                        }
+                    }
+
                     if (err.message.includes('STOK_MYPERTAMINA_KOSONG')) {
                         pangkalanStokHabis = true;
                     } else if (err.message.includes('FATAL_LIMIT_EXCEEDED')) {
@@ -899,7 +949,8 @@ async function run() {
             if (pangkalanStokHabis) {
                 console.log(`Stok Pangkalan "${merchantName}" habis. Mencoba masuk ke pangkalan berikutnya...`);
             } else {
-                const trxCheck = await api.get('/api/nik-siap-lapor/detail');
+                const checkUrl = (syncJob && syncJob.user_id) ? `/api/nik-siap-lapor/detail?user_id=${syncJob.user_id}` : '/api/nik-siap-lapor/detail';
+                const trxCheck = await api.get(checkUrl);
                 if (trxCheck.data.data.length === 0) {
                     console.log('✓ Semua transaksi selesai dilaporkan!');
                     completedSuccessfully = true;

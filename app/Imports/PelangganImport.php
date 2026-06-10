@@ -55,8 +55,8 @@ class PelangganImport implements
                 continue;
             }
 
-            // Upsert: update jika NIK sudah ada, insert jika baru
-            Pelanggan::updateOrCreate(
+            // Insert jika baru, abaikan jika sudah ada agar status terakhir (aktif/nonaktif) tetap terjaga
+            Pelanggan::firstOrCreate(
                 ['nik' => $rowData['nik']],
                 [
                     'status' => true,
@@ -79,7 +79,14 @@ class PelangganImport implements
             $nik = number_format($nik, 0, '', '');
         }
 
-        return trim((string) $nik);
+        $nik = trim((string) $nik);
+
+        // Jika berupa angka dan panjangnya kurang dari 16, tambahkan zero-padding di depan (biasanya nol terpotong oleh Excel)
+        if (is_numeric($nik) && strlen($nik) < 16 && strlen($nik) > 0) {
+            $nik = str_pad($nik, 16, '0', STR_PAD_LEFT);
+        }
+
+        return $nik;
     }
 
     public function getImportedCount(): int

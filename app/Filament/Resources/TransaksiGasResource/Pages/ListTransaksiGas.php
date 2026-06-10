@@ -11,6 +11,14 @@ class ListTransaksiGas extends ListRecords
 {
     protected static string $resource = TransaksiGasResource::class;
 
+    public function mount(): void
+    {
+        parent::mount();
+
+        // Bersihkan otomatis data transaksi bulan-bulan sebelumnya
+        \App\Models\TransaksiGas::where('tanggal_transaksi', '<', now()->startOfMonth())->delete();
+    }
+
     protected function getExposedTableWidgetData(): array
     {
         $data = parent::getExposedTableWidgetData();
@@ -149,17 +157,18 @@ class ListTransaksiGas extends ListRecords
                         ->label('Tanggal Transaksi')
                         ->required()
                         ->default(now())
-                        ->maxDate(now()),
+                        ->maxDate(now()->endOfMonth())
+                        ->helperText('Transaksi akan diutamakan pada minggu dari tanggal ini, lalu didistribusikan ke minggu lain pada bulan yang sama jika kuota minggu ini habis.'),
                 ])
                 ->modalHeading('Distribusi Tabung Otomatis')
-                ->modalDescription('Fitur ini akan otomatis membuat transaksi penjualan gas LPG 3 Kg untuk pelanggan yang kuotanya masih tersedia sampai seluruh tabung teralokasikan.')
+                ->modalDescription('Fitur ini akan otomatis membuat transaksi penjualan gas LPG 3 Kg (maksimal 1 tabung per minggu per pelanggan) secara merata di seluruh minggu pada bulan berjalan.')
                 ->action(function (array $data) {
-                    $totalTarget = (int) $data['total_tabung'];
-                    $tanggal = $data['tanggal_transaksi'];
-                    $baseDate = \Carbon\Carbon::parse($tanggal);
-                    $bulan = $baseDate->month;
-                    $tahun = $baseDate->year;
-                    $pangkalanId = $data['akun_pangkalan_id'];
+                    $totalTarget    = (int) $data['total_tabung'];
+                    $tanggal        = $data['tanggal_transaksi'];
+                    $baseDate       = \Carbon\Carbon::parse($tanggal);
+                    $bulan          = $baseDate->month;
+                    $tahun          = $baseDate->year;
+                    $pangkalanId    = $data['akun_pangkalan_id'];
 
                     // Ambil pelanggan aktif milik user
                     $pelangganList = Pelanggan::where('status', true)
@@ -175,35 +184,119 @@ class ListTransaksiGas extends ListRecords
                         return;
                     }
 
+                    // 1. Generate semua minggu di bulan ini (ISO Week: Senin - Minggu)
+                    $startOfMonth = $baseDate->copy()->startOfMonth();
+                    $endOfMonth = $baseDate->copy()->endOfMonth();
+
+                    $weeks = [];
+                    $current = $startOfMonth->copy();
+                    while ($current->lte($endOfMonth)) {
+                        $sOfWeek = $current->copy()->startOfWeek();
+                        $eOfWeek = $current->copy()->endOfWeek();
+                        
+                        $weekKey = $sOfWeek->format('Y-m-d') . '_' . $eOfWeek->format('Y-m-d');
+                        if (!isset($weeks[$weekKey])) {
+                            // Tanggal transaksi riil harus dibatasi dalam bulan ini
+                            $intersectStart = $sOfWeek->copy()->max($startOfMonth);
+                            $intersectEnd = $eOfWeek->copy()->min($endOfMonth);
+                            
+                            $weeks[$weekKey] = [
+                                'query_start' => $sOfWeek,
+                                'query_end' => $eOfWeek,
+                                'trx_start' => $intersectStart,
+                                'trx_end' => $intersectEnd,
+                            ];
+                        }
+                        $current->addDay();
+                    }
+
+                    // 2. Urutkan minggu: prioritaskan minggu dari tanggal_transaksi yang dipilih user, baru minggu lainnya
+                    $selectedWeekKey = $baseDate->copy()->startOfWeek()->format('Y-m-d') . '_' . $baseDate->copy()->endOfWeek()->format('Y-m-d');
+                    
+                    $prioritizedWeeks = [];
+                    if (isset($weeks[$selectedWeekKey])) {
+                        $prioritizedWeeks[] = $weeks[$selectedWeekKey];
+                        unset($weeks[$selectedWeekKey]);
+                    }
+                    foreach ($weeks as $w) {
+                        $prioritizedWeeks[] = $w;
+                    }
+
+                    // 3. Distribusikan tabung (1 per minggu per pelanggan, max 4 per bulan, maks 1 per hari lintas pangkalan)
                     $allocated = 0;
                     $createdCount = 0;
 
-                    // Lakukan pengalokasian bertahap (multi-pass)
-                    $startOfWeek = $baseDate->copy()->startOfWeek();
-                    $endOfWeek = $baseDate->copy()->endOfWeek();
+                    // Track kuota bulanan pelanggan secara in-memory untuk menghemat query dan akurat
+                    $customerMonthlyTotals = [];
+                    foreach ($pelangganList as $p) {
+                        $customerMonthlyTotals[$p->id] = $p->totalTabungBulanIni($bulan, $tahun);
+                    }
 
-                    while ($allocated < $totalTarget) {
+                    // Ambil semua tanggal transaksi yang sudah ada di bulan ini untuk tiap pelanggan (lintas seluruh pangkalan)
+                    $existingTrxDates = \App\Models\TransaksiGas::whereMonth('tanggal_transaksi', $bulan)
+                        ->whereYear('tanggal_transaksi', $tahun)
+                        ->select('pelanggan_id', 'tanggal_transaksi')
+                        ->get()
+                        ->groupBy('pelanggan_id')
+                        ->map(function ($trxs) {
+                            return $trxs->map(fn ($t) => \Carbon\Carbon::parse($t->tanggal_transaksi)->toDateString())
+                                ->unique()
+                                ->values()
+                                ->toArray();
+                        })
+                        ->toArray();
+
+                    $newTrxDates = []; // Track tanggal transaksi baru yang dibuat di run/request ini
+                    $newTrxDatesForPangkalan = []; // Track jumlah alokasi per pangkalan per minggu di run/request ini
+
+                    foreach ($prioritizedWeeks as $week) {
+                        $weekKey = $week['query_start']->format('Y-m-d') . '_' . $week['query_end']->format('Y-m-d');
+                        
+                        if ($allocated >= $totalTarget) {
+                            break;
+                        }
+
+                        // Tentukan tanggal transaksi untuk minggu ini (sesuai hari dari tanggal_transaksi yang dipilih)
+                        $targetDate = $week['query_start']->copy()->startOfWeek()->addDays($baseDate->dayOfWeek - 1);
+                        // Batasi agar tetap berada di bulan berjalan
+                        if ($targetDate->lt($startOfMonth)) {
+                            $targetDate = $startOfMonth->copy();
+                        } elseif ($targetDate->gt($endOfMonth)) {
+                            $targetDate = $endOfMonth->copy();
+                        }
+                        
+                        $dStr = $targetDate->toDateString();
+
+                        // Cari pelanggan yang memenuhi syarat di minggu ini
                         $candidates = [];
                         foreach ($pelangganList as $p) {
-                            $sisaBulan = 4 - $p->totalTabungBulanIni($bulan, $tahun);
-                            if ($sisaBulan <= 0) {
+                            // Cek limit bulanan
+                            if ($customerMonthlyTotals[$p->id] >= 4) {
                                 continue;
                             }
 
-                            $sisaMinggu = 1 - \App\Models\TransaksiGas::where('pelanggan_id', $p->id)
+                            // Cek limit mingguan di pangkalan terpilih (gabungan DB + in-memory baru)
+                            $weeklySum = \App\Models\TransaksiGas::where('pelanggan_id', $p->id)
                                 ->where('akun_pangkalan_id', $pangkalanId)
-                                ->whereBetween('tanggal_transaksi', [$startOfWeek, $endOfWeek])
+                                ->whereBetween('tanggal_transaksi', [$week['query_start'], $week['query_end']])
                                 ->sum('jumlah_tabung');
 
-                            if ($sisaMinggu > 0) {
+                            $newWeeklySum = $newTrxDatesForPangkalan[$p->id][$weekKey] ?? 0;
+
+                            if (($weeklySum + $newWeeklySum) >= 1) {
+                                continue;
+                            }
+
+                            // Cek apakah hari ini kosong lintas pangkalan
+                            $isFree = !in_array($dStr, $existingTrxDates[$p->id] ?? []) 
+                                && !in_array($dStr, $newTrxDates[$p->id] ?? []);
+
+                            if ($isFree) {
                                 $candidates[] = $p;
                             }
                         }
 
-                        if (empty($candidates)) {
-                            break;
-                        }
-
+                        // Acak daftar kandidat agar merata
                         shuffle($candidates);
 
                         foreach ($candidates as $p) {
@@ -211,11 +304,20 @@ class ListTransaksiGas extends ListRecords
                                 break;
                             }
 
-                            // Acak jam transaksi antara 08:00 sampai 17:00
+                            if ($customerMonthlyTotals[$p->id] >= 4) {
+                                continue;
+                            }
+
+                            // Pastikan kembali hari ini belum terpakai oleh transaksi baru dari pelanggan ini (double check)
+                            if (in_array($dStr, $newTrxDates[$p->id] ?? [])) {
+                                continue;
+                            }
+
+                            // Acak jam transaksi antara 08:00 sampai 16:59
                             $randomHour = rand(8, 16);
                             $randomMinute = rand(0, 59);
                             $randomSecond = rand(0, 59);
-                            $waktuTransaksi = $baseDate->copy()->setTime($randomHour, $randomMinute, $randomSecond);
+                            $waktuTransaksi = $targetDate->copy()->setTime($randomHour, $randomMinute, $randomSecond);
 
                             \App\Models\TransaksiGas::create([
                                 'pelanggan_id' => $p->id,
@@ -226,21 +328,26 @@ class ListTransaksiGas extends ListRecords
                                 'status_lapor' => 'belum_lapor',
                             ]);
 
+                            $customerMonthlyTotals[$p->id]++;
+                            $newTrxDates[$p->id][] = $dStr;
+                            $newTrxDatesForPangkalan[$p->id][$weekKey] = ($newTrxDatesForPangkalan[$p->id][$weekKey] ?? 0) + 1;
                             $allocated++;
                             $createdCount++;
                         }
                     }
+
                     if ($allocated < $totalTarget) {
+                        $sisa = $totalTarget - $allocated;
                         \Filament\Notifications\Notification::make()
-                            ->title('Distribusi Selesai Sebagian')
-                            ->body("Berhasil membuat {$createdCount} transaksi. Sebanyak " . ($totalTarget - $allocated) . " tabung tidak teralokasikan karena kuota mingguan/bulanan seluruh pelanggan aktif bulan ini sudah penuh.")
+                            ->title("Distribusi Selesai Sebagian")
+                            ->body("Berhasil membuat {$createdCount} transaksi ({$allocated} tabung). Sisa {$sisa} tabung tidak teralokasikan karena seluruh kuota bulanan/harian pelanggan aktif Anda sudah penuh.")
                             ->warning()
                             ->persistent()
                             ->send();
                     } else {
                         \Filament\Notifications\Notification::make()
-                            ->title('Distribusi Otomatis Berhasil')
-                            ->body("Berhasil membuat {$createdCount} transaksi baru secara otomatis dengan waktu terdistribusi acak.")
+                            ->title("Distribusi Otomatis Berhasil ✅")
+                            ->body("Berhasil membuat {$createdCount} transaksi, total {$allocated} tabung terdistribusi merata tanpa bentrok tanggal lintas pangkalan.")
                             ->success()
                             ->send();
                     }

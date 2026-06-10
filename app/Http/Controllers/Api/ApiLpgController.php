@@ -27,6 +27,9 @@ class ApiLpgController extends Controller
         $bulan = $request->integer('bulan', Carbon::now()->month);
         $tahun = $request->integer('tahun', Carbon::now()->year);
 
+        // Hapus otomatis transaksi bulan-bulan sebelumnya
+        TransaksiGas::where('tanggal_transaksi', '<', Carbon::now()->startOfMonth())->delete();
+
         // Hapus otomatis transaksi yang hari transaksinya sudah lewat (sebelum hari ini) dan belum/gagal terlaporkan
         TransaksiGas::whereDate('tanggal_transaksi', '<', Carbon::today())
             ->where('status_lapor', '!=', 'sukses')
@@ -92,6 +95,9 @@ class ApiLpgController extends Controller
         $bulan = $request->integer('bulan', Carbon::now()->month);
         $tahun = $request->integer('tahun', Carbon::now()->year);
 
+        // Hapus otomatis transaksi bulan-bulan sebelumnya
+        TransaksiGas::where('tanggal_transaksi', '<', Carbon::now()->startOfMonth())->delete();
+
         // Hapus otomatis transaksi yang hari transaksinya sudah lewat (sebelum hari ini) dan belum/gagal terlaporkan
         TransaksiGas::whereDate('tanggal_transaksi', '<', Carbon::today())
             ->where('status_lapor', '!=', 'sukses')
@@ -116,6 +122,12 @@ class ApiLpgController extends Controller
 
         if ($request->filled('akun_pangkalan_id')) {
             $queryBuilder->where('akun_pangkalan_id', $request->input('akun_pangkalan_id'));
+        }
+
+        if ($request->filled('user_id')) {
+            $queryBuilder->whereHas('akunPangkalan', function ($q) use ($request) {
+                $q->where('user_id', $request->input('user_id'));
+            });
         }
 
         $transaksi = $queryBuilder->orderBy('tanggal_transaksi')
