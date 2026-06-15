@@ -29,6 +29,7 @@ class SisaKuotaWidget extends BaseWidget
             ->description("Kuota direset otomatis setiap bulan baru. Maks. 4 tabung per pelanggan per bulan.")
             ->query(
                 Pelanggan::query()
+                    ->where('user_id', auth()->id())
                     ->where('status', true)
                     ->withSum([
                         'transaksiGas as total_tabung_bulan_ini' => function (Builder $query) use ($bulan, $tahun) {

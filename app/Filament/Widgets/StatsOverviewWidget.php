@@ -23,16 +23,22 @@ class StatsOverviewWidget extends BaseWidget
         $tahun    = Carbon::now()->year;
         $namaBulan = Carbon::now()->translatedFormat('F Y');
 
-        $totalPelanggan   = Pelanggan::where('status', true)->count();
-        $transaksiHariIni = TransaksiGas::whereDate('tanggal_transaksi', today())->count();
-        $tabungBulanIni   = TransaksiGas::whereMonth('tanggal_transaksi', $bulan)
+        $userId = auth()->id();
+
+        $totalPelanggan   = Pelanggan::where('user_id', $userId)->where('status', true)->count();
+        $transaksiHariIni = TransaksiGas::whereHas('akunPangkalan', fn($q) => $q->where('user_id', $userId))
+                                ->whereDate('tanggal_transaksi', today())
+                                ->count();
+        $tabungBulanIni   = TransaksiGas::whereHas('akunPangkalan', fn($q) => $q->where('user_id', $userId))
+                                ->whereMonth('tanggal_transaksi', $bulan)
                                 ->whereYear('tanggal_transaksi', $tahun)
                                 ->where('status_lapor', 'sukses') // Hanya hitung yang sudah sukses dilaporkan
                                 ->sum('jumlah_tabung');
 
         // Pelanggan yang kuota habis bulan ini (total >= 4)
         // Dioptimalkan menggunakan query agregasi langsung pada tabel transaksi agar sangat ringan & instan
-        $kuotaHabis = TransaksiGas::whereMonth('tanggal_transaksi', $bulan)
+        $kuotaHabis = TransaksiGas::whereHas('akunPangkalan', fn($q) => $q->where('user_id', $userId))
+            ->whereMonth('tanggal_transaksi', $bulan)
             ->whereYear('tanggal_transaksi', $tahun)
             ->selectRaw('pelanggan_id')
             ->groupBy('pelanggan_id')
@@ -40,7 +46,8 @@ class StatsOverviewWidget extends BaseWidget
             ->get()
             ->count();
 
-        $belumDilaporkan = TransaksiGas::whereMonth('tanggal_transaksi', $bulan)
+        $belumDilaporkan = TransaksiGas::whereHas('akunPangkalan', fn($q) => $q->where('user_id', $userId))
+                                ->whereMonth('tanggal_transaksi', $bulan)
                                 ->whereYear('tanggal_transaksi', $tahun)
                                 ->where('dilaporkan_pertamina', false)
                                 ->count();

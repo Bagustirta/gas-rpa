@@ -808,7 +808,8 @@ async function run() {
                             try {
                                 backToInputPage = await page.evaluate(() => {
                                     const input = document.querySelector('input[type="text"]');
-                                    return !!input && !document.body.textContent.includes('PROSES PENJUALAN');
+                                    const hasPassword = !!document.querySelector('input[type="password"]');
+                                    return !!input && !hasPassword && !document.body.textContent.includes('PROSES PENJUALAN');
                                 });
                             } catch (e) {
                                 backToInputPage = false;
@@ -830,8 +831,16 @@ async function run() {
                                 if (isStillOnSummary) {
                                     throw new Error('Captcha ditutup atau dibatalkan oleh pengguna.');
                                 } else {
-                                    isCaptchaSolved = true;
-                                    console.log('✓ Halaman bergeser. Transaksi selesai diproses.');
+                                    const pageText = await page.evaluate(() => document.body.textContent.toLowerCase());
+                                    const pageUrl = page.url().toLowerCase();
+                                    if (pageUrl.includes('/login') || pageText.includes('masuk ke akun') || pageText.includes('selamat datang')) {
+                                        throw new Error('Sesi login berakhir saat memproses transaksi.');
+                                    } else if (pageText.includes('gagal') || pageText.includes('error') || pageText.includes('kesalahan') || pageText.includes('tidak berhasil')) {
+                                        throw new Error('Transaksi gagal diproses oleh portal Pertamina (Terdeteksi error/kegagalan pada halaman).');
+                                    } else {
+                                        isCaptchaSolved = true;
+                                        console.log('✓ Halaman bergeser. Transaksi selesai diproses.');
+                                    }
                                 }
                             }
                         } else {

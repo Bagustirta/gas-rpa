@@ -76,13 +76,13 @@ class PelangganResource extends Resource
                     ->trueColor('success')
                     ->falseColor('danger'),
 
-                Tables\Columns\TextColumn::make('kuota_terpakai')
+                Tables\Columns\TextColumn::make('total_tabung_bulan_ini')
                     ->label('Terpakai Bulan Ini')
-                    ->state(fn (Pelanggan $record) => $record->totalTabungBulanIni() . ' / 4')
+                    ->state(fn (Pelanggan $record) => ($record->total_tabung_bulan_ini ?? 0) . ' / 4')
                     ->badge()
                     ->color(fn (Pelanggan $record) => match(true) {
-                        $record->totalTabungBulanIni() >= 4 => 'danger',
-                        $record->totalTabungBulanIni() >= 2 => 'warning',
+                        ($record->total_tabung_bulan_ini ?? 0) >= 4 => 'danger',
+                        ($record->total_tabung_bulan_ini ?? 0) >= 2 => 'warning',
                         default => 'success',
                     }),
 
@@ -225,7 +225,12 @@ class PelangganResource extends Resource
 
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
-        return parent::getEloquentQuery()->where('user_id', auth()->id());
+        return parent::getEloquentQuery()
+            ->where('user_id', auth()->id())
+            ->withSum(['transaksiGas as total_tabung_bulan_ini' => function ($query) {
+                $query->whereMonth('tanggal_transaksi', now()->month)
+                    ->whereYear('tanggal_transaksi', now()->year);
+            }], 'jumlah_tabung');
     }
 
     public static function getNavigationBadge(): ?string

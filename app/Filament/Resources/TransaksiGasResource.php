@@ -314,9 +314,11 @@ class TransaksiGasResource extends Resource
 
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
-        return parent::getEloquentQuery()->whereHas('akunPangkalan', function ($q) {
-            $q->where('user_id', auth()->id());
-        });
+        return parent::getEloquentQuery()
+            ->with(['pelanggan', 'akunPangkalan'])
+            ->whereHas('akunPangkalan', function ($q) {
+                $q->where('user_id', auth()->id());
+            });
     }
 
     public static function getNavigationBadge(): ?string
