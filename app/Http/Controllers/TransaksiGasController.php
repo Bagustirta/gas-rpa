@@ -34,12 +34,13 @@ class TransaksiGasController extends Controller
             $query->where('akun_pangkalan_id', $request->akun_pangkalan_id);
         }
 
-        if ($request->filled('bulan')) {
-            $query->whereMonth('tanggal_transaksi', $request->bulan);
+        if ($request->filled('tanggal')) {
+            $query->whereDate('tanggal_transaksi', $request->tanggal);
         }
 
         $transaksis = $query->orderBy('tanggal_transaksi', 'desc')
             ->paginate(15)
+            ->onEachSide(1)
             ->withQueryString()
             ->through(fn($item) => [
                 'id' => $item->id,
@@ -65,7 +66,7 @@ class TransaksiGasController extends Controller
         return Inertia::render('TransaksiGas/Index', [
             'transaksis' => $transaksis,
             'pangkalans' => $pangkalans,
-            'filters' => $request->only(['search', 'status_lapor', 'akun_pangkalan_id', 'bulan']),
+            'filters' => $request->only(['search', 'status_lapor', 'akun_pangkalan_id', 'tanggal']),
             'activeSync' => $activeSync,
         ]);
     }
@@ -138,6 +139,8 @@ class TransaksiGasController extends Controller
             ]);
         }
 
+        $validated['tanggal_transaksi'] = Carbon::parse($validated['tanggal_transaksi'])->setTimeFromTimeString(now()->toTimeString());
+
         TransaksiGas::create([
             ...$validated,
             'status_lapor' => 'belum_lapor',
@@ -194,6 +197,8 @@ class TransaksiGasController extends Controller
                 'jumlah_tabung' => "Pelanggan ini sudah membeli {$monthlySum} tabung pada bulan ini secara keseluruhan. Batas bulanan adalah 4 tabung."
             ]);
         }
+
+        $validated['tanggal_transaksi'] = Carbon::parse($validated['tanggal_transaksi'])->setTimeFromTimeString(now()->toTimeString());
 
         $transaksiGas->update($validated);
 
@@ -474,8 +479,8 @@ class TransaksiGasController extends Controller
                     continue;
                 }
 
-                // Tanggal transaksi menggunakan tanggal yang dipilih user langsung
-                $waktuTransaksi = $targetDate->copy();
+                // Tanggal transaksi menggunakan tanggal yang dipilih user langsung + Jam Saat Ini (On-Point)
+                $waktuTransaksi = $targetDate->copy()->setTimeFromTimeString(now()->toTimeString());
 
                 // Masukkan ke antrean transaksi tertunda terlebih dahulu
                 $pendingTransactions[] = [

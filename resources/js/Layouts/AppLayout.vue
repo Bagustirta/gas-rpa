@@ -1,10 +1,10 @@
 <template>
-  <div class="min-h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row font-sans">
+  <div class="h-dvh w-full overflow-hidden bg-slate-50 text-slate-800 flex flex-col md:flex-row font-sans">
     <!-- Mobile Header -->
-    <header class="md:hidden bg-white border-b border-slate-250/80 px-4 py-3 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+    <header class="md:hidden bg-white border-b border-slate-200/80 px-4 py-3 flex items-center justify-between sticky top-0 z-30 shadow-sm">
       <div class="flex items-center space-x-2">
-        <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-md">
-          G
+        <div class="w-10 h-10 flex items-center justify-center">
+          <img src="/logo.png" alt="Logo" class="w-full h-full object-contain drop-shadow-sm" />
         </div>
         <span class="font-bold text-lg tracking-wider text-indigo-600">GAS-RPA</span>
       </div>
@@ -21,12 +21,12 @@
       'fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200 flex flex-col justify-between transform transition-transform duration-300 md:translate-x-0 md:static',
       isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
     ]">
-      <div>
+      <div class="flex-1 overflow-y-auto">
         <!-- Logo Header -->
-        <div class="h-16 flex items-center px-6 border-b border-slate-200/80">
+        <div class="h-16 flex items-center px-6 border-b border-slate-200/80 sticky top-0 bg-white z-10">
           <div class="flex items-center space-x-3">
-            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center font-black text-white shadow-md">
-              🔥
+            <div class="w-12 h-12 flex items-center justify-center">
+              <img src="/logo.png" alt="Logo" class="w-full h-full object-contain drop-shadow-sm" />
             </div>
             <div>
               <h1 class="font-black text-base tracking-tight text-slate-900">GAS-RPA</h1>
@@ -90,9 +90,9 @@
     ></div>
 
     <!-- Main Content Area -->
-    <main class="flex-1 flex flex-col min-w-0">
+    <main class="flex-1 flex flex-col w-full min-w-0 min-h-0 overflow-x-hidden">
       <!-- Top navbar (desktop only) -->
-      <header class="hidden md:flex h-16 bg-white border-b border-slate-200/80 px-8 items-center justify-between sticky top-0 z-20 shadow-sm">
+      <header class="hidden md:flex h-16 bg-white border-b border-slate-200/80 px-8 items-center justify-between sticky top-0 z-20 shadow-sm w-full">
         <h2 class="font-bold text-lg text-slate-850">{{ currentPageTitle }}</h2>
         <div class="flex items-center space-x-4">
           <div class="h-8 w-[1px] bg-slate-200"></div>
@@ -104,7 +104,7 @@
       </header>
 
       <!-- Page Content -->
-      <div class="flex-1 p-4 md:p-8 overflow-y-auto">
+      <div class="flex-1 w-full min-h-0 p-4 md:p-8 overflow-y-auto overflow-x-hidden">
         <!-- Toast Notification Area -->
         <transition-group
           enter-active-class="transform ease-out duration-300 transition"

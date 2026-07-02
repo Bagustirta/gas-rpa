@@ -56,6 +56,7 @@ class PelangganController extends Controller
 
         $pelanggans = $query->orderBy('nik')
             ->paginate(15)
+            ->onEachSide(1)
             ->withQueryString()
             ->through(fn($item) => [
                 'id' => $item->id,

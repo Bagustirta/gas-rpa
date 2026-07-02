@@ -120,18 +120,25 @@
           </select>
         </div>
 
-        <!-- Filter Bulan -->
-        <div class="w-full">
-          <select
-            v-model="filters.bulan"
+        <!-- Filter Tanggal -->
+        <div class="relative w-full">
+          <input
+            v-model="filters.tanggal"
             @change="applyFilters"
-            class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 focus:outline-none focus:border-indigo-500 transition-all duration-200"
+            type="date"
+            class="w-full bg-white border border-slate-200 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-slate-700 focus:outline-none focus:border-indigo-500 transition-all duration-200"
+            title="Filter Tanggal Transaksi"
+          />
+          <button
+            v-if="filters.tanggal"
+            @click="clearTanggalFilter"
+            class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+            title="Hapus filter tanggal"
           >
-            <option value="">Semua Bulan Transaksi</option>
-            <option v-for="m in 12" :key="m" :value="m">
-              {{ getMonthName(m) }}
-            </option>
-          </select>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -245,25 +252,31 @@
           </table>
         </div>
 
-        <!-- Pagination -->
-        <div v-if="transaksis.links && transaksis.data.length > 0" class="flex justify-between items-center mt-6 pt-4 border-t border-slate-100">
-          <p class="text-xs text-slate-500 font-medium">
-            Menampilkan {{ transaksis.data.length }} dari {{ transaksis.total }} transaksi
+        <!-- Pagination (Full Windowed) -->
+        <div v-if="transaksis.last_page > 1" class="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 pt-4 border-t border-slate-100">
+          <p class="text-xs text-slate-500 font-medium order-2 sm:order-1">
+            Halaman <span class="font-bold text-slate-700">{{ transaksis.current_page }}</span> dari {{ transaksis.last_page }}
+            <span class="text-slate-300 mx-1">·</span>
+            {{ transaksis.total }} transaksi
           </p>
-          <div class="flex space-x-2">
-            <Link
-              v-for="link in transaksis.links"
-              :key="link.label"
-              :href="link.url || '#'"
-              :class="[
-                'px-3 py-1.5 rounded-lg text-xs transition-all duration-200 border',
-                link.active ? 'bg-indigo-600 border-indigo-500 text-white font-bold' :
-                link.url ? 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800' :
-                'bg-slate-50/50 border-slate-100 text-slate-300 cursor-not-allowed'
-              ]"
-              v-html="link.label"
-            />
-          </div>
+          <nav class="flex items-center gap-1 order-1 sm:order-2" aria-label="Pagination">
+            <template v-for="item in transaksiPages" :key="item">
+              <span
+                v-if="item === '...'"
+                class="inline-flex items-end justify-center h-8 w-5 text-sm text-slate-400 pb-0.5"
+              >···</span>
+              <Link
+                v-else
+                :href="route('transaksi-gas.index', { ...currentFilters, page: item })"
+                :class="[
+                  'inline-flex items-center justify-center h-8 w-8 rounded-md text-xs font-medium border transition-all duration-150',
+                  item === transaksis.current_page
+                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-100 scale-105'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600 shadow-sm'
+                ]"
+              >{{ item }}</Link>
+            </template>
+          </nav>
         </div>
       </div>
 
@@ -449,7 +462,32 @@ const filters = reactive({
   search: page.props.filters?.search || '',
   status_lapor: page.props.filters?.status_lapor || '',
   akun_pangkalan_id: page.props.filters?.akun_pangkalan_id || '',
-  bulan: page.props.filters?.bulan || '',
+  tanggal: page.props.filters?.tanggal || '',
+});
+
+// Current filters for building page URLs
+const currentFilters = computed(() => ({
+  search: filters.search,
+  status_lapor: filters.status_lapor,
+  akun_pangkalan_id: filters.akun_pangkalan_id,
+  tanggal: filters.tanggal,
+}));
+
+// Full windowed pagination — always shows 5 pages in the window
+const transaksiPages = computed(() => {
+  const current = transaksis.value.current_page;
+  const last = transaksis.value.last_page;
+  if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
+  // Near start: pages 1-5 ... last
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, '...', last];
+  }
+  // Near end: 1 ... last-4 to last
+  if (current >= last - 3) {
+    return [1, '...', last - 4, last - 3, last - 2, last - 1, last];
+  }
+  // Middle: 1 ... current-2 current-1 current current+1 current+2 ... last
+  return [1, '...', current - 2, current - 1, current, current + 1, current + 2, '...', last];
 });
 
 const showDeleteModal = ref(false);
@@ -483,9 +521,9 @@ const toggleSelectAll = () => {
   }
 };
 
-const getMonthName = (m) => {
-  const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-  return months[m - 1];
+const clearTanggalFilter = () => {
+  filters.tanggal = '';
+  applyFilters();
 };
 
 let searchTimeout = null;
@@ -501,7 +539,7 @@ const applyFilters = () => {
     search: filters.search,
     status_lapor: filters.status_lapor,
     akun_pangkalan_id: filters.akun_pangkalan_id,
-    bulan: filters.bulan,
+    tanggal: filters.tanggal,
   }, {
     preserveState: true,
     replace: true,
@@ -589,7 +627,10 @@ const openDistModal = () => {
   distForm.reset();
   distForm.clearErrors();
   const now = new Date();
-  distForm.tanggal_transaksi = now.toISOString().split('T')[0];
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  distForm.tanggal_transaksi = `${year}-${month}-${day}`;
   distForm.akun_pangkalan_id = '';
   distForm.total_tabung = '';
   showDistModal.value = true;

@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-slate-50 flex flex-col justify-center items-center px-4 relative overflow-hidden font-sans">
+  <div class="min-h-dvh bg-slate-50 flex flex-col justify-center items-center px-4 relative overflow-hidden font-sans">
     <!-- Background soft glow elements -->
     <div class="absolute w-96 h-96 rounded-full bg-indigo-200/40 blur-[120px] top-1/4 left-1/4 -z-10"></div>
     <div class="absolute w-96 h-96 rounded-full bg-rose-200/30 blur-[120px] bottom-1/4 right-1/4 -z-10"></div>
@@ -7,8 +7,8 @@
     <div class="w-full max-w-md">
       <!-- Logo Header -->
       <div class="text-center mb-8">
-        <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center font-black text-2xl text-white shadow-lg shadow-indigo-200 mx-auto mb-4">
-          🔥
+        <div class="w-24 h-24 flex items-center justify-center mx-auto mb-4">
+          <img src="/logo.png" alt="Logo" class="w-full h-full object-contain drop-shadow-md" />
         </div>
         <h2 class="text-2xl font-black tracking-tight text-slate-950">GAS-RPA</h2>
         <p class="text-xs text-slate-500 mt-1">Automated LPG 3Kg Distribution Sync System</p>

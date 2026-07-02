@@ -155,25 +155,31 @@
           </table>
         </div>
 
-        <!-- Pagination -->
-        <div v-if="pelanggans.links && pelanggans.data.length > 0" class="flex justify-between items-center mt-6 pt-4 border-t border-slate-100">
-          <p class="text-xs text-slate-500 font-medium">
-            Menampilkan {{ pelanggans.data.length }} dari {{ pelanggans.total }} pelanggan
+        <!-- Pagination (Full Windowed) -->
+        <div v-if="pelanggans.last_page > 1" class="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 pt-4 border-t border-slate-100">
+          <p class="text-xs text-slate-500 font-medium order-2 sm:order-1">
+            Halaman <span class="font-bold text-slate-700">{{ pelanggans.current_page }}</span> dari {{ pelanggans.last_page }}
+            <span class="text-slate-300 mx-1">·</span>
+            {{ pelanggans.total }} pelanggan
           </p>
-          <div class="flex space-x-2">
-            <Link
-              v-for="link in pelanggans.links"
-              :key="link.label"
-              :href="link.url || '#'"
-              :class="[
-                'px-3 py-1.5 rounded-lg text-xs transition-all duration-200 border',
-                link.active ? 'bg-indigo-600 border-indigo-500 text-white font-bold' :
-                link.url ? 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800' :
-                'bg-slate-50/50 border-slate-100 text-slate-300 cursor-not-allowed'
-              ]"
-              v-html="link.label"
-            />
-          </div>
+          <nav class="flex items-center gap-1 order-1 sm:order-2" aria-label="Pagination">
+            <template v-for="item in pelangganPages" :key="item">
+              <span
+                v-if="item === '...'"
+                class="inline-flex items-end justify-center h-8 w-5 text-sm text-slate-400 pb-0.5"
+              >···</span>
+              <Link
+                v-else
+                :href="route('pelanggan.index', { ...pelangganFilters, page: item })"
+                :class="[
+                  'inline-flex items-center justify-center h-8 w-8 rounded-md text-xs font-medium border transition-all duration-150',
+                  item === pelanggans.current_page
+                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-100 scale-105'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600 shadow-sm'
+                ]"
+              >{{ item }}</Link>
+            </template>
+          </nav>
         </div>
       </div>
 
@@ -325,6 +331,22 @@ const filters = reactive({
   search: page.props.filters?.search || '',
   status: page.props.filters?.status || '',
   sisa_kuota: page.props.filters?.sisa_kuota || '',
+});
+
+const pelangganFilters = computed(() => ({
+  search: filters.search,
+  status: filters.status,
+  sisa_kuota: filters.sisa_kuota,
+}));
+
+// Full windowed pagination — always shows 5 pages in the window
+const pelangganPages = computed(() => {
+  const current = pelanggans.value.current_page;
+  const last = pelanggans.value.last_page;
+  if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
+  if (current <= 4) return [1, 2, 3, 4, 5, '...', last];
+  if (current >= last - 3) return [1, '...', last - 4, last - 3, last - 2, last - 1, last];
+  return [1, '...', current - 2, current - 1, current, current + 1, current + 2, '...', last];
 });
 
 const showModal = ref(false);

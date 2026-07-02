@@ -71,6 +71,7 @@ class DashboardController extends Controller
             ->selectSub($subquery, 'total_tabung_bulan_ini')
             ->orderBy('total_tabung_bulan_ini', 'desc')
             ->paginate(10)
+            ->onEachSide(1)
             ->withQueryString()
             ->through(fn($item) => [
                 'id' => $item->id,

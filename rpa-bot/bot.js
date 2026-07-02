@@ -1,14 +1,798 @@
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+puppeteer.use(StealthPlugin());
 const axios = require('axios');
 const readline = require('readline');
 require('dotenv').config();
 
-const LARAVEL_URL = process.env.LARAVEL_APP_URL || 'http://localhost:8000';
+const LARAVEL_URL = process.env.LARAVEL_APP_URL || process.env.APP_URL || 'http://localhost:8000';
 const API_KEY = process.env.LPG_API_KEY || 'lpg-secret-token-12345';
 const PERTAMINA_URL = process.env.PERTAMINA_PORTAL_URL || 'https://subsiditepat.mypertamina.id/LPG';
 
 // Helper sleep berbasis Node.js agar aman dari Execution Context Destroyed saat page reload
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+// =========================================================================
+// SISTEM PEMACAH CAPTCHA IN-HOUSE (COMPUTER VISION / CANVAS PIXEL MATCH)
+// =========================================================================
+async function findCaptchaFrame(page) {
+    const checkFrameForCaptcha = async (frameContext, isMainPage) => {
+        return await frameContext.evaluate((isMain) => {
+            const isVisible = (el) => {
+                const rect = el.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none' && window.getComputedStyle(el).visibility !== 'hidden';
+            };
+
+            // 1. Cari indikator kuat bahwa ini adalah captcha
+            const txtBody = document.body ? document.body.textContent : '';
+            const hasCaptchaText = txtBody.includes('Cocokan Gambar') ||
+                txtBody.includes('GESER tombol') ||
+                txtBody.includes('Geser ke kanan') ||
+                txtBody.includes('proses keamanan');
+            const hasCaptchaClass = !!document.querySelector('[class*="geetest"]') ||
+                !!document.querySelector('[class*="captcha"]') ||
+                !!document.querySelector('[class*="secsdk"]') ||
+                !!document.querySelector('[class*="verify"]');
+
+            // Jika di main page, kita WAJIB memiliki kelas captcha atau teks captcha spesifik untuk menghindari false positive
+            if (isMain && !hasCaptchaClass && !hasCaptchaText) {
+                return false;
+            }
+
+            // 2. Temukan container captcha aktif
+            let container = null;
+            const divs = Array.from(document.querySelectorAll('div, section, form, [class*="modal"], [class*="dialog"], [class*="captcha"]')).filter(isVisible);
+            for (const div of divs) {
+                const txt = (div.textContent || '').toLowerCase();
+                const matchTxt = txt.includes('cocokan gambar') || txt.includes('geser tombol') || txt.includes('geser ke kanan') || txt.includes('proses keamanan');
+                if (matchTxt) {
+                    const hasImg = div.querySelector('img, canvas');
+                    const rect = div.getBoundingClientRect();
+                    if (hasImg && rect.width <= 800 && rect.height <= 800) {
+                        container = div;
+                        break;
+                    }
+                }
+            }
+
+            if (!container && (hasCaptchaClass || hasCaptchaText)) {
+                container = document.body;
+            }
+
+            if (!container) return false;
+
+            // 3. Cari tombol geser/slider button
+            const commonButtonSelectors = [
+                '[class*="slider__button"]', '[class*="slider-button"]', '[class*="slider_btn"]',
+                '[class*="slider-btn"]', '[class*="slider_handler"]', '[class*="slider-handle"]',
+                '[class*="geetest_slider_button"]', '.ui-slider-handle', '.nc_scale_btn', '.handler',
+                '.geetest_btn', '.secsdk-captcha-drag-icon', '.verify-btn', '.slider-btn'
+            ];
+            let hasSliderBtn = false;
+            for (let selector of commonButtonSelectors) {
+                const btn = container.querySelector(selector);
+                if (btn && isVisible(btn)) {
+                    hasSliderBtn = true;
+                    break;
+                }
+            }
+
+            if (!hasSliderBtn) {
+                const elements = Array.from(container.querySelectorAll('*')).filter(isVisible);
+                const hasDragText = elements.some(e => {
+                    const txt = (e.textContent || '').trim().toLowerCase();
+                    return txt.includes('geser') || txt.includes('slide') || txt.includes('drag');
+                });
+                if (hasDragText) {
+                    hasSliderBtn = true;
+                }
+            }
+
+            // 4. Cari background captcha (canvas atau img ukuran sedang)
+            const imgs = Array.from(container.querySelectorAll('img, canvas')).filter(isVisible);
+            const hasBgImg = imgs.some(el => {
+                const r = el.getBoundingClientRect();
+                return r.width >= 120 && r.width <= 500 && r.height >= 50 && r.height <= 300;
+            });
+
+            return hasSliderBtn && hasBgImg;
+        }, isMainPage).catch(() => false);
+    };
+
+    try {
+        // Cek child frames terlebih dahulu (karena captcha MyPertamina selalu di dalam iframe)
+        for (const frame of page.frames()) {
+            if (frame === page) continue;
+            if (await checkFrameForCaptcha(frame, false)) {
+                return frame;
+            }
+        }
+
+        // Cek main page sebagai fallback terakhir
+        if (await checkFrameForCaptcha(page, true)) {
+            return page;
+        }
+    } catch (err) {
+        console.log('[Captcha Detector] Error saat mencari frame:', err.message);
+    }
+    return null;
+}
+
+let lastBgSrc = '';
+
+async function autoSolveSliderCaptcha(page) {
+    try {
+        console.log('[In-House Solver] Mengaktifkan Computer Vision untuk menganalisa Captcha...');
+
+        // 1. Temukan frame yang berisi captcha
+        const captchaFrame = await findCaptchaFrame(page);
+        if (!captchaFrame) {
+            console.log('[In-House Solver] Gagal: Frame captcha tidak ditemukan.');
+            return false;
+        }
+
+        // --- TUNGGU HINGGA CAPTCHA BARU BENAR-BENAR SIAP ---
+        console.log('[In-House Solver] Menunggu animasi transisi UI captcha (2.0 detik)...');
+        await page.waitForTimeout ? await page.waitForTimeout(2000) : await new Promise(r => setTimeout(r, 2000)); // Dipercepat agar captcha tidak keburu auto-refresh karena inactivity
+
+        const isReady = await captchaFrame.evaluate(() => {
+            const isVisible = (el) => {
+                const rect = el.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none' && window.getComputedStyle(el).visibility !== 'hidden';
+            };
+            const allImgs = Array.from(document.querySelectorAll('img, canvas')).filter(isVisible);
+            return { ready: allImgs.length >= 2, bgSrc: 'bypass' };
+        });
+
+        if (!isReady.ready) {
+            console.log('[In-House Solver] Peringatan: Gambar captcha baru belum siap atau loading lambat. Melanjutkan dengan elemen yang ada...');
+        } else {
+            console.log('[In-House Solver] Gambar captcha baru terverifikasi steril dan siap.');
+            lastBgSrc = isReady.bgSrc;
+        }
+
+        // 2. Dapatkan offset koordinat jika captcha di dalam iframe
+        let frameOffset = { x: 0, y: 0 };
+        if (captchaFrame !== page) {
+            try {
+                const iframeElement = await captchaFrame.frameElement();
+                if (iframeElement) {
+                    const box = await iframeElement.boundingBox();
+                    if (box) {
+                        frameOffset = { x: box.x, y: box.y };
+                        console.log(`[In-House Solver] Frame Captcha berupa iframe terdeteksi pada offset: x=${Math.round(frameOffset.x)}, y=${Math.round(frameOffset.y)}`);
+                    }
+                }
+            } catch (iframeErr) {
+                console.log('[In-House Solver] Warning: Gagal mendapatkan frameElement, mencoba alternatif...');
+            }
+
+            // Fallback offset jika masih 0,0: Cari iframe yang sesuai di parent frame
+            if (frameOffset.x === 0 && frameOffset.y === 0) {
+                const iframeOffsetAlt = await page.evaluate((url) => {
+                    const iframes = Array.from(document.querySelectorAll('iframe'));
+                    const target = iframes.find(f => f.src === url || (f.contentWindow && f.contentWindow.location.href === url));
+                    if (target) {
+                        const rect = target.getBoundingClientRect();
+                        return { x: rect.left, y: rect.top };
+                    }
+                    const targetPart = iframes.find(f => f.src && f.src.includes(url.split('?')[0]));
+                    if (targetPart) {
+                        const rect = targetPart.getBoundingClientRect();
+                        return { x: rect.left, y: rect.top };
+                    }
+                    const largestIframe = iframes.sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width)[0];
+                    if (largestIframe) {
+                        const rect = largestIframe.getBoundingClientRect();
+                        return { x: rect.left, y: rect.top };
+                    }
+                    return null;
+                }, captchaFrame.url()).catch(() => null);
+
+                if (iframeOffsetAlt) {
+                    frameOffset = iframeOffsetAlt;
+                    console.log(`[In-House Solver] Offset iframe alternatif ditemukan: x=${Math.round(frameOffset.x)}, y=${Math.round(frameOffset.y)}`);
+                }
+            }
+        }
+        // 3. Dapatkan posisi tombol geser/handler dan track
+        // Cek dulu di dalam captchaFrame, lalu di page utama (jika di luar frame)
+        let btnRect = null;
+        let isBtnInFrame = false;
+
+        const findBtnLogic = () => {
+            const elements = Array.from(document.querySelectorAll('*'));
+            const textNode = elements.find(e => e.textContent && e.textContent.trim().toLowerCase() === 'geser ke kanan');
+
+            if (textNode) {
+                let track = textNode.parentElement;
+                while (track && track.getBoundingClientRect().width < 150) track = track.parentElement;
+                if (track) {
+                    const children = Array.from(track.querySelectorAll('*'));
+                    let leftmostBtn = null;
+                    let minX = Infinity;
+                    for (let child of children) {
+                        const rect = child.getBoundingClientRect();
+                        if (rect.width >= 30 && rect.width <= 80 && rect.height >= 30 && rect.height <= 80) {
+                            if (rect.x < minX) {
+                                minX = rect.x;
+                                leftmostBtn = rect;
+                            }
+                        }
+                    }
+                    const tRect = track.getBoundingClientRect();
+                    if (leftmostBtn) return { x: leftmostBtn.x, y: leftmostBtn.y, width: leftmostBtn.width, height: leftmostBtn.height, trackWidth: tRect.width };
+                    return { x: tRect.x, y: tRect.y, width: 50, height: tRect.height, trackWidth: tRect.width };
+                }
+            }
+
+            const selectors = ['.slider__button', '.slider-button', '.geetest_slider_button', '.secsdk-captcha-drag-icon', '.verify-btn', '.slider-btn', '.ui-slider-handle'];
+            for (let sel of selectors) {
+                const btn = document.querySelector(sel);
+                if (btn) {
+                    const rect = btn.getBoundingClientRect();
+                    if (rect.width > 0) {
+                        let track = btn.parentElement;
+                        while (track && track.getBoundingClientRect().width < 100) track = track.parentElement;
+                        return { x: rect.left, y: rect.top, width: rect.width, height: rect.height, trackWidth: track ? track.getBoundingClientRect().width : rect.width + 200 };
+                    }
+                }
+            }
+            return null;
+        };
+
+        // Cek iframe dulu
+        btnRect = await captchaFrame.evaluate(findBtnLogic).catch(() => null);
+        if (btnRect) {
+            isBtnInFrame = true;
+        } else {
+            // Kalau tidak ada di iframe, cek di page utama
+            btnRect = await page.evaluate(findBtnLogic).catch(() => null);
+        }
+
+        if (!btnRect) {
+            console.log('[In-House Solver] Gagal: Tombol geser/Track tidak ditemukan di layar utama maupun iframe.');
+            return false;
+        }
+
+        if (isBtnInFrame) {
+            btnRect.x += frameOffset.x;
+            btnRect.y += frameOffset.y;
+        }
+        // 4. Dapatkan rect gambar background & posisi kepingan puzzle dari frame secara dinamis
+        const captchaInfo = await captchaFrame.evaluate(() => {
+            const isVisible = (el) => {
+                const rect = el.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none' && window.getComputedStyle(el).visibility !== 'hidden';
+            };
+
+            // Temukan container captcha aktif
+            let container = null;
+            const divs = Array.from(document.querySelectorAll('div, section, form, [class*="modal"], [class*="dialog"], [class*="captcha"]')).filter(isVisible);
+            for (const div of divs) {
+                const txt = (div.textContent || '').toLowerCase();
+                const matchTxt = txt.includes('cocokan gambar') || txt.includes('geser tombol') || txt.includes('geser ke kanan') || txt.includes('proses keamanan');
+                if (matchTxt) {
+                    const hasImg = div.querySelector('img, canvas');
+                    const rect = div.getBoundingClientRect();
+                    if (hasImg && rect.width <= 800 && rect.height <= 800) {
+                        container = div;
+                        break;
+                    }
+                }
+            }
+
+            if (!container) {
+                container = document.body;
+            }
+
+            const allImgs = Array.from(container.querySelectorAll('img, canvas')).filter(isVisible);
+            if (allImgs.length === 0) return null;
+
+            // Cari background image (lebar biasanya 150px - 500px)
+            const candidates = allImgs.filter(el => {
+                const r = el.getBoundingClientRect();
+                return r.width >= 150 && r.width <= 500 && r.height >= 80 && r.height <= 300;
+            });
+
+            const bgImg = candidates.sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width)[0] ||
+                allImgs.sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width)[0];
+
+            if (!bgImg) return null;
+            const bgR = bgImg.getBoundingClientRect();
+
+            // Cari kepingan puzzle (piece)
+            let pieceEl = allImgs.find(el => {
+                if (el === bgImg) return false;
+                const r = el.getBoundingClientRect();
+                const isPieceSize = r.width >= 20 && r.width <= 100 && r.height >= 20 && r.height <= 100;
+                const overlapsVertically = r.top >= bgR.top - 15 && r.bottom <= bgR.bottom + 15;
+                return isPieceSize && overlapsVertically;
+            });
+
+            if (!pieceEl) {
+                pieceEl = allImgs.find(el => {
+                    if (el === bgImg) return false;
+                    const r = el.getBoundingClientRect();
+                    return r.width >= 20 && r.width <= 100;
+                });
+            }
+
+            let pieceScreenX = 10;
+            let pieceScreenY = 10;
+            let pieceScreenW = 50;
+            let pieceScreenH = 50;
+
+            if (pieceEl) {
+                const pr = pieceEl.getBoundingClientRect();
+                const rawX = pr.left - bgR.left;
+                const rawY = pr.top - bgR.top;
+
+                if (rawX >= -50 && rawX < bgR.width * 0.45) pieceScreenX = rawX;
+                pieceScreenY = rawY >= 0 ? rawY : 0;
+                pieceScreenW = pr.width;
+                pieceScreenH = pr.height;
+
+                // Jika kepingan puzzle merender secara "full height" (seperti irisan slice vertikal)
+                // Kita harus mengekstrak dimensi aslinya secara dinamis memindai piksel transparansinya
+                if (pieceScreenH > bgR.height * 0.7) {
+                    try {
+                        const tempC = document.createElement('canvas');
+                        tempC.width = pr.width;
+                        tempC.height = pr.height;
+                        const ctx = tempC.getContext('2d');
+                        if (pieceEl.tagName === 'CANVAS') {
+                            ctx.drawImage(pieceEl, 0, 0);
+                        } else {
+                            ctx.drawImage(pieceEl, 0, 0, pr.width, pr.height);
+                        }
+
+                        const imgD = ctx.getImageData(0, 0, tempC.width, tempC.height).data;
+                        let minY = tempC.height, maxY = 0;
+                        let minX = tempC.width, maxX = 0;
+
+                        for (let y = 0; y < tempC.height; y++) {
+                            for (let x = 0; x < tempC.width; x++) {
+                                const alpha = imgD[(y * tempC.width + x) * 4 + 3];
+                                if (alpha > 20) {
+                                    if (y < minY) minY = y;
+                                    if (y > maxY) maxY = y;
+                                    if (x < minX) minX = x;
+                                    if (x > maxX) maxX = x;
+                                }
+                            }
+                        }
+
+                        if (minY <= maxY && minX <= maxX) {
+                            pieceScreenY = rawY + minY;
+                            pieceScreenH = maxY - minY + 1;
+
+                            // Crop juga sumbu X agar kotak tidak kebesaran oleh transparansi!
+                            pieceScreenX = Math.max(0, rawX + minX);
+                            pieceScreenW = maxX - minX + 1;
+                        } else {
+                            pieceScreenY = rawY + Math.floor(pr.height / 2) - 25;
+                            pieceScreenH = 50;
+                            pieceScreenW = 50;
+                        }
+                    } catch (e) {
+                        pieceScreenY = rawY + Math.floor(pr.height / 2) - 25;
+                        pieceScreenH = 50;
+                        pieceScreenW = 50;
+                    }
+                }
+            }
+
+            return {
+                bgRect: { left: bgR.left, top: bgR.top, width: bgR.width, height: bgR.height },
+                pieceScreenX,
+                pieceScreenY,
+                pieceScreenW,
+                pieceScreenH,
+                rawX: pieceEl ? (pieceEl.getBoundingClientRect().left - bgR.left) : 0
+            };
+        });
+
+        if (!captchaInfo || !captchaInfo.bgRect) {
+            console.log('[In-House Solver] Gagal: Gambar background captcha tidak ditemukan.');
+            return false;
+        }
+
+        let { bgRect, pieceScreenX, pieceScreenY, pieceScreenW, pieceScreenH } = captchaInfo;
+
+        // Hitung koordinat absolut background untuk screenshot
+        const absoluteBgRect = {
+            left: bgRect.left + frameOffset.x,
+            top: bgRect.top + frameOffset.y,
+            width: bgRect.width,
+            height: bgRect.height
+        };
+
+        // 5. Menganalisa letak lubang — Metode Utama: FullBG Subtraction, Fallback: Combined Scoring
+        console.log('[In-House Solver] Mengaktifkan Computer Vision untuk menganalisa Captcha...');
+
+        const holeResult = await captchaFrame.evaluate(async (pW, pH, pY, pX) => {
+            const allCanvases = Array.from(document.querySelectorAll('canvas'));
+            const allImgs = Array.from(document.querySelectorAll('img, canvas'));
+
+            const bgImg = allImgs.find(el => {
+                const r = el.getBoundingClientRect();
+                return r.width > 150 && r.height > 100;
+            });
+            if (!bgImg) return { holeCenter: 150 };
+
+            const natW = bgImg.naturalWidth || bgImg.width;
+            const natH = bgImg.naturalHeight || bgImg.height;
+            const scaleRatio = bgImg.getBoundingClientRect().width / natW;
+
+            const bgC = document.createElement('canvas');
+            bgC.width = natW; bgC.height = natH;
+            const bgCtx = bgC.getContext('2d');
+            try { bgCtx.drawImage(bgImg, 0, 0, natW, natH); } catch(e) { return { holeCenter: 150 }; }
+            const bgData = bgCtx.getImageData(0, 0, natW, natH).data;
+
+            const naturalPW = Math.floor(pW / scaleRatio);
+
+            // === METODE 1: FULLBG PIXEL SUBTRACTION ===
+            // Cari elemen full-background (tanpa lubang) dari canvas DAN img
+            let fullBgEl = null;
+            const allMediaElements = [...allCanvases, ...Array.from(document.querySelectorAll('img'))];
+
+            // Pass 1: Cari berdasarkan class name
+            for (const c of allMediaElements) {
+                const cn = (c.className || '').toLowerCase();
+                if (cn.includes('fullbg') || cn.includes('full_bg') || cn.includes('complete')) { fullBgEl = c; break; }
+            }
+            // Pass 2: Cari canvas/img tersembunyi dengan dimensi sama (hidden full background)
+            if (!fullBgEl) {
+                for (const c of allMediaElements) {
+                    if (c === bgImg) continue;
+                    const elW = c.naturalWidth || c.width;
+                    const elH = c.naturalHeight || c.height;
+                    if (elW >= natW - 5 && elW <= natW + 5 && elH >= natH - 5) {
+                        const st = window.getComputedStyle(c);
+                        const isHidden = st.display === 'none' || st.visibility === 'hidden' || parseFloat(st.opacity) === 0 || c.getBoundingClientRect().width === 0;
+                        if (isHidden) { fullBgEl = c; break; }
+                    }
+                }
+            }
+            // Pass 3: Cari elemen visible kedua dengan ukuran serupa (mungkin ditumpuk di belakang)
+            if (!fullBgEl) {
+                for (const c of allMediaElements) {
+                    if (c === bgImg) continue;
+                    const elW = c.naturalWidth || c.width;
+                    const elH = c.naturalHeight || c.height;
+                    if (elW > 200 && elH > 100 && Math.abs(elW - natW) <= 10) { fullBgEl = c; break; }
+                }
+            }
+
+            if (fullBgEl) {
+                const fbC = document.createElement('canvas');
+                fbC.width = natW; fbC.height = natH;
+                const fbCtx = fbC.getContext('2d');
+                let fbOk = true;
+                try { fbCtx.drawImage(fullBgEl, 0, 0, natW, natH); } catch(e) { fbOk = false; }
+
+                if (fbOk) {
+                    const fbData = fbCtx.getImageData(0, 0, natW, natH).data;
+
+                    // Step 1: Hitung column-wise luminance difference
+                    const colDiff = new Float32Array(natW);
+                    for (let x = 0; x < natW; x++) {
+                        let ds = 0;
+                        for (let y = 0; y < natH; y++) {
+                            const i = (y * natW + x) * 4;
+                            const lBg = 0.299*bgData[i]+0.587*bgData[i+1]+0.114*bgData[i+2];
+                            const lFb = 0.299*fbData[i]+0.587*fbData[i+1]+0.114*fbData[i+2];
+                            ds += Math.abs(lBg - lFb);
+                        }
+                        colDiff[x] = ds;
+                    }
+
+                    // Step 2: Tentukan threshold dinamis (30% dari peak)
+                    let peakDiff = 0;
+                    for (let x = 0; x < natW; x++) {
+                        if (colDiff[x] > peakDiff) peakDiff = colDiff[x];
+                    }
+                    const diffThreshold = peakDiff * 0.3;
+
+                    // Step 3: Temukan cluster kolom yang melebihi threshold
+                    let clusters = [];
+                    let curCluster = null;
+                    for (let x = 0; x < natW; x++) {
+                        if (colDiff[x] > diffThreshold) {
+                            if (!curCluster) curCluster = { start: x, end: x, weight: 0 };
+                            curCluster.end = x;
+                            curCluster.weight += colDiff[x];
+                        } else {
+                            if (curCluster) { clusters.push(curCluster); curCluster = null; }
+                        }
+                    }
+                    if (curCluster) clusters.push(curCluster);
+
+                    // Gabungkan cluster yang berdekatan (gap <= 5px, akibat noise)
+                    let merged = [];
+                    for (const c of clusters) {
+                        if (merged.length > 0 && c.start - merged[merged.length-1].end <= 5) {
+                            merged[merged.length-1].end = c.end;
+                            merged[merged.length-1].weight += c.weight;
+                        } else {
+                            merged.push({...c});
+                        }
+                    }
+
+                    // Step 4: Pilih cluster terbesar (berdasarkan total weight)
+                    const bestCluster = merged.sort((a, b) => b.weight - a.weight)[0];
+
+                    if (bestCluster && (bestCluster.end - bestCluster.start) >= naturalPW * 0.5) {
+                        // Step 5: Hitung centroid (pusat massa) dari cluster terbaik
+                        let weightedSum = 0, totalWeight = 0;
+                        for (let x = bestCluster.start; x <= bestCluster.end; x++) {
+                            weightedSum += x * colDiff[x];
+                            totalWeight += colDiff[x];
+                        }
+                        const centroidX = totalWeight > 0 ? weightedSum / totalWeight : (bestCluster.start + bestCluster.end) / 2;
+                        const detectedW = bestCluster.end - bestCluster.start + 1;
+
+                        return {
+                            holeCenter: centroidX * scaleRatio,
+                            holeWidth: detectedW * scaleRatio,
+                            holeLeftX: bestCluster.start,
+                            method: 'fullbg-centroid', score: bestCluster.weight, scaleRatio
+                        };
+                    }
+
+                    // Fallback: sliding window jika clustering gagal
+                    let maxD = 0, bestX = 0;
+                    for (let x = 0; x < natW - naturalPW; x++) {
+                        let rd = 0;
+                        for (let dx = 0; dx < naturalPW; dx++) rd += colDiff[x + dx];
+                        if (rd > maxD) { maxD = rd; bestX = x; }
+                    }
+                    return {
+                        holeCenter: (bestX + naturalPW / 2) * scaleRatio,
+                        holeWidth: naturalPW * scaleRatio,
+                        holeLeftX: bestX, method: 'fullbg-sliding-window', score: maxD, scaleRatio
+                    };
+                }
+            }
+
+            // === METODE 2 (FALLBACK): Contour & Contrast Scoring ===
+            const naturalPY = Math.floor(pY / scaleRatio);
+            const naturalPH = Math.floor(pH / scaleRatio);
+            const naturalPX = Math.floor(pX / scaleRatio);
+            // Mulai scan setelah area kepingan asli
+            const startScanX = Math.max(Math.floor(natW * 0.35), naturalPX + naturalPW + 5);
+            const startY = Math.max(0, naturalPY);
+            const endY = Math.min(natH, naturalPY + naturalPH);
+            const bH = endY - startY;
+            if (bH <= 0) return { holeCenter: 150 };
+
+            // 1. Hitung rata-rata kecerahan per kolom (untuk deteksi area terang/gelap)
+            const colAvg = new Float32Array(natW);
+            for (let x = 0; x < natW; x++) {
+                let s = 0;
+                for (let y = startY; y < endY; y++) {
+                    const i = (y * natW + x) * 4;
+                    s += 0.299*bgData[i] + 0.587*bgData[i+1] + 0.114*bgData[i+2];
+                }
+                colAvg[x] = s / bH;
+            }
+
+            // 2. Hitung kekuatan edge vertikal per kolom (untuk deteksi batas kepingan)
+            const edgeStr = new Float32Array(natW);
+            for (let x = 1; x < natW - 1; x++) {
+                let es = 0;
+                for (let y = startY; y < endY; y++) {
+                    const iP = (y * natW + (x - 1)) * 4;
+                    const iN = (y * natW + (x + 1)) * 4;
+                    es += Math.abs(
+                        (0.299*bgData[iP] + 0.587*bgData[iP+1] + 0.114*bgData[iP+2]) -
+                        (0.299*bgData[iN] + 0.587*bgData[iN+1] + 0.114*bgData[iN+2])
+                    );
+                }
+                edgeStr[x] = es / bH;
+            }
+
+            // 3. Scoring setiap posisi X yang mungkin
+            let maxSc = -Infinity, bestX2 = startScanX;
+            for (let x = startScanX; x < natW - naturalPW - 5; x++) {
+                // Rata-rata kecerahan di dalam area lubang
+                let innerSum = 0;
+                for (let dx = 0; dx < naturalPW; dx++) innerSum += colAvg[x + dx];
+                const innerAvg = innerSum / naturalPW;
+
+                // Rata-rata kecerahan di luar area lubang (border)
+                let borderSum = 0, borderCount = 0;
+                for (let dx = 1; dx <= 10; dx++) {
+                    if (x - dx >= 0) { borderSum += colAvg[x - dx]; borderCount++; }
+                    if (x + naturalPW + dx < natW) { borderSum += colAvg[x + naturalPW + dx]; borderCount++; }
+                }
+                const borderAvg = borderCount > 0 ? borderSum / borderCount : innerAvg;
+                
+                // Contrast bisa positif (overlay putih/terang) atau negatif (overlay gelap/hitam)
+                // Kita gunakan absolute difference karena MyPertamina sering pakai overlay putih.
+                const contrast = Math.abs(borderAvg - innerAvg);
+
+                // Kekuatan edge di batas kiri dan kanan lubang (dengan margin error ±2px)
+                let leftEdge = 0, rightEdge = 0;
+                for (let d = -2; d <= 2; d++) {
+                    leftEdge += edgeStr[Math.max(0, x + d)] || 0;
+                    rightEdge += edgeStr[Math.min(natW - 1, x + naturalPW + d)] || 0;
+                }
+                
+                // Skor akhir = Kombinasi contrast area dengan kekuatan edge di batasnya
+                // Kita kembali menggunakan penjumlahan (+) karena ini sudah terbukti akurat sebelumnya
+                const score = contrast * (leftEdge + rightEdge);
+                
+                if (score > maxSc) { 
+                    maxSc = score; 
+                    bestX2 = x; 
+                }
+            }
+            
+            return {
+                holeCenter: (bestX2 + naturalPW / 2) * scaleRatio,
+                holeWidth: naturalPW * scaleRatio,
+                holeLeftX: bestX2, method: 'combined-scoring', score: maxSc, scaleRatio
+            };
+        }, pieceScreenW, pieceScreenH, pieceScreenY, pieceScreenX);
+
+        const holeCenter = holeResult.holeCenter;
+
+        // 6. Kalkulasi Gerakan (Mapping 1:1)
+        const maxSliderTravel = btnRect.trackWidth - btnRect.width;
+        
+        // Kita tidak memakai ratio karena berdasarkan pengujian, gerakan layar mouse (pixel)
+        // ter-map secara 1:1 dengan pergerakan elemen kepingan di CSS MyPertamina.
+        
+        const pieceCenter = pieceScreenX + (pieceScreenW / 2);
+        const pieceDragRequired = holeCenter - pieceCenter;
+
+        // Jarak murni yang dibutuhkan kepingan.
+        // Berdasarkan pengamatan visual user, gerakan 1:1 murni menyebabkan undershoot sekitar 10%.
+        // Kita akan menambahkan dorongan ekstra 10% (multiplier 1.10) agar pas.
+        const trackScale = 1.10; 
+        let targetDistance = pieceDragRequired * trackScale;
+
+        // DEBUG LOGGING UNTUK INVESTIGASI DETAIL
+        console.log(`[In-House Solver Debug] === DETAIL KALKULASI CAPTCHA ===`);
+        console.log(`[In-House Solver Debug] bgRect: width=${bgRect.width}`);
+        console.log(`[In-House Solver Debug] btnRect: trackWidth=${btnRect.trackWidth}, width=${btnRect.width}, maxSliderTravel=${Math.round(maxSliderTravel)}`);
+        console.log(`[In-House Solver Debug] pieceCenter: ${Math.round(pieceCenter)}, holeCenter: ${Math.round(holeCenter)}`);
+        console.log(`[In-House Solver Debug] pieceDragRequired: ${Math.round(pieceDragRequired)} (1:1 Movement)`);
+        console.log(`[In-House Solver Debug] targetDistance (Drag Mouse): ${Math.round(targetDistance)}px`);
+        console.log(`[In-House Solver Debug] ===================================`);
+
+        // Visualisasi debug di dalam frame — menggunakan lebar lubang TERDETEKSI, bukan lebar kepingan
+        const detectedHoleWidth = holeResult.holeWidth || pieceScreenW;
+        await captchaFrame.evaluate((bLeft, bTop, hC, hW, pH, pY) => {
+            const old = document.getElementById('rpa-debug-line');
+            if (old) old.remove();
+            const d = document.createElement('div');
+            d.id = 'rpa-debug-line';
+            d.style.cssText = `position:fixed;left:${bLeft + hC - (hW / 2)}px;top:${bTop + pY}px;height:${pH}px;width:${hW}px;border:2px dashed red;background:rgba(255,0,0,0.15);z-index:99999;pointer-events:none;`;
+            document.body.appendChild(d);
+
+            const centerLine = document.createElement('div');
+            centerLine.style.cssText = `position:absolute;left:${hW / 2}px;top:0;height:100%;width:2px;background:red;`;
+            d.appendChild(centerLine);
+        }, bgRect.left, bgRect.top, holeCenter, detectedHoleWidth, pieceScreenH, pieceScreenY);
+
+        // Validasi jarak: jika terlalu kecil, kemungkinan deteksi salah — skip dan refresh
+        if (!targetDistance || targetDistance < 15) {
+            console.log(`[In-House Solver] ⚠️ Jarak terdeteksi terlalu kecil (${Math.round(targetDistance || 0)}px). Deteksi mungkin salah, melewati percobaan ini.`);
+            return false;
+        }
+
+        console.log(`[In-House Solver] Target lubang terdeteksi. Menggeser slider sejauh: ${Math.round(targetDistance)}px. (maxTravel=${Math.round(maxSliderTravel)}px)`);
+
+        // 7. Simulasi geseran mouse manusia (Anti-Deteksi dengan Reset Jumper)
+        const startX = btnRect.x + (btnRect.width / 2);
+        const startY = btnRect.y + (btnRect.height / 2);
+
+        console.log(`[In-House Solver] Memulai tarikan dari Kordinat X: ${Math.round(startX)}, Y: ${Math.round(startY)}`);
+
+        // Reset pergerakan mouse menjauh dari area captcha untuk menghilangkan jejak tarikan sebelumnya
+        const safeX = Math.floor(Math.random() * 200 + 50);
+        const safeY = Math.floor(Math.random() * 200 + 50);
+        await page.mouse.move(safeX, safeY, { steps: 5 });
+        await sleep(400);
+
+        // Dekati tombol secara perlahan
+        await page.mouse.move(startX, startY, { steps: 10 });
+        await sleep(300);
+        await page.mouse.down();
+        await sleep(200);
+
+        // Gerakkan kursor meniru manusia (Ease-in-out Bezier curve + micro-pauses)
+        // Smoothstep: percepatan awal → kecepatan puncak di tengah → perlambatan di akhir
+        const smoothstep = (t) => t * t * (3 - 2 * t);
+        const steps = 25 + Math.floor(Math.random() * 15); // 25-40 steps (variabel)
+        let currentX = startX;
+        for (let i = 1; i <= steps; i++) {
+            const t = i / steps;
+            const eased = smoothstep(t); // Non-linear progression
+            currentX = startX + (targetDistance * eased);
+
+            // Y wobble: sedikit naik di awal, turun di akhir (pola busur alami)
+            const arcY = Math.sin(t * Math.PI) * (1.5 + Math.random() * 1.5);
+            const jitterY = (Math.random() - 0.5) * 1.2;
+            let wobbleY = startY - arcY + jitterY;
+
+            await page.mouse.move(currentX, wobbleY, { steps: 1 });
+
+            // Jeda variabel: lebih lambat di awal dan akhir, cepat di tengah
+            const baseDelay = t < 0.2 || t > 0.85 ? 25 : 10;
+            await sleep(baseDelay + Math.random() * 12);
+
+            // Micro-pause acak (1 dari 8 kesempatan) meniru ragu-ragu manusia
+            if (Math.random() < 0.125 && t > 0.3 && t < 0.8) {
+                await sleep(40 + Math.random() * 60);
+            }
+        }
+
+        // Overshoot proporsional terhadap jarak (lebih jauh = lebih kebablasan)
+        const overshootPx = 2 + Math.random() * 3 + targetDistance * 0.015;
+        await page.mouse.move(currentX + overshootPx, startY + (Math.random() * 1.5 - 0.5), { steps: 4 });
+        await sleep(80 + Math.random() * 100);
+
+        // Koreksi mundur perlahan ke titik pas
+        await page.mouse.move(startX + targetDistance, startY + (Math.random() * 0.8 - 0.4), { steps: 5 });
+        await sleep(60 + Math.random() * 80);
+
+        // Lepaskan
+        await page.mouse.up();
+
+        console.log('[In-House Solver] Tarikan dilepas. Menunggu validasi...');
+        await sleep(2500);
+
+        // 8. Cek keberhasilan di dalam frame menggunakan pencarian ulang frame yang steril
+        let isStillThere = false;
+        try {
+            const currentCaptchaFrame = await findCaptchaFrame(page);
+            isStillThere = (currentCaptchaFrame !== null);
+        } catch (frameErr) {
+            console.log('[In-House Solver] Frame terlepas atau hancur, berasumsi captcha selesai.');
+            isStillThere = false;
+        }
+
+        if (!isStillThere) {
+            console.log('[In-House Solver] ✅ SUKSES! Captcha berhasil dipecahkan.');
+            return true;
+        } else {
+            console.log('[In-House Solver] ❌ GAGAL. Mencoba refresh gambar captcha baru...');
+            await captchaFrame.evaluate(() => {
+                const refreshBtnSelectors = [
+                    '[class*="refresh"]',
+                    '[class*="change"]',
+                    '[class*="ganti"]',
+                    '.geetest_refresh_1'
+                ];
+                for (let sel of refreshBtnSelectors) {
+                    const el = document.querySelector(sel);
+                    if (el) { el.click(); return; }
+                }
+                const allElements = document.querySelectorAll('*');
+                for (let el of allElements) {
+                    const txt = (el.textContent || '').toLowerCase();
+                    if (txt.includes('ganti') || txt.includes('refresh') || txt.includes('ubah')) {
+                        el.click();
+                        return;
+                    }
+                }
+            }).catch(() => { });
+            await sleep(2000);
+            return false;
+        }
+
+    } catch (e) {
+        console.log('[In-House Solver] Error saat memecahkan captcha: ', e.message);
+        return false;
+    }
+}
+// =========================================================================
+
 
 // Variabel global untuk pengelolaan cleanup saat interupsi (Ctrl+C)
 let activeBrowser = null;
@@ -208,7 +992,7 @@ async function run() {
 
             if (transactions.length === 0) {
                 console.log(`✓ Tidak ada transaksi pending untuk pangkalan: ${pangkalan.nama_pangkalan}`);
-                
+
                 // Cek apakah masih ada transaksi untuk pangkalan lain
                 const checkUrl = (syncJob && syncJob.user_id) ? `/api/nik-siap-lapor/detail?user_id=${syncJob.user_id}` : '/api/nik-siap-lapor/detail';
                 const trxCheck = await api.get(checkUrl);
@@ -274,14 +1058,14 @@ async function run() {
                     await page.keyboard.press('Backspace');
                     await sleep(200);
                     await page.type('[data-rpa-sync="email"]', pangkalan.email, { delay: 60 });
-                    
+
                     await sleep(300);
 
                     await page.click('[data-rpa-sync="password"]', { clickCount: 3 });
                     await page.keyboard.press('Backspace');
                     await sleep(200);
                     await page.type('[data-rpa-sync="password"]', pangkalan.password, { delay: 60 });
-                    
+
                     // Pancing event blur dan change agar tulisan error merah hilang
                     await page.evaluate(() => {
                         const emailEl = document.querySelector('[data-rpa-sync="email"]');
@@ -317,7 +1101,7 @@ async function run() {
                         }
                         return false;
                     });
-                    
+
                     if (btnFound) {
                         await page.click('#rpa-submit-btn');
                         console.log('✓ Mengklik tombol masuk secara otomatis.');
@@ -332,14 +1116,36 @@ async function run() {
             // 5. Menunggu login sukses secara otomatis
             console.log('Menunggu Anda berhasil login di browser...');
             let isLoggedIn = false;
+            let loginSolverTries = 0;
             while (!isLoggedIn) {
                 try {
                     const currentUrl = page.url();
                     if (currentUrl.includes('/merchant/app') || currentUrl.includes('/merchant/dashboard') || currentUrl.includes('/penjualan')) {
                         isLoggedIn = true;
                     }
-                } catch (e) {}
+                } catch (e) { }
+
                 if (!isLoggedIn) {
+                    // Periksa apakah ada slider captcha di halaman login
+                    try {
+                        const captchaFrame = await findCaptchaFrame(page);
+                        const hasCaptcha = (captchaFrame !== null);
+
+                        if (hasCaptcha) {
+                            if (loginSolverTries < 5) {
+                                loginSolverTries++;
+                                console.log(`[Login] Mendeteksi Captcha Keamanan di halaman login. Mencoba meretas otomatis (Percobaan ke-${loginSolverTries}/5)...`);
+                                const solveSuccess = await autoSolveSliderCaptcha(page);
+                                if (!solveSuccess && loginSolverTries >= 5) {
+                                    console.log('[Login] Bot menyerah setelah 5 kali gagal login captcha. Menunggu Anda menyelesaikannya secara manual...');
+                                }
+                                await sleep(2000);
+                            }
+                        }
+                    } catch (captchaErr) {
+                        console.error('[Login Captcha Check Error]:', captchaErr.message);
+                    }
+
                     await sleep(1000);
                 }
             }
@@ -363,7 +1169,7 @@ async function run() {
                 }
                 return null;
             });
-            
+
             if (!merchantName) {
                 merchantName = pangkalan.nama_pangkalan;
             }
@@ -413,7 +1219,7 @@ async function run() {
                         await sleep(3000);
                     }
                 }
-            } catch (e) {}
+            } catch (e) { }
 
             // Menunggu halaman input NIK siap secara otomatis
             console.log('Menunggu Halaman Pencatatan Transaksi siap (mencari kolom NIK)...');
@@ -431,15 +1237,15 @@ async function run() {
                             const placeholder = (input.getAttribute('placeholder') || '').toLowerCase();
                             const name = (input.getAttribute('name') || '').toLowerCase();
                             const id = input.id.toLowerCase();
-                            return placeholder.includes('nik') || placeholder.includes('ktp') || 
-                                   name.includes('nik') || name.includes('ktp') || 
-                                   id.includes('nik') || id.includes('ktp');
+                            return placeholder.includes('nik') || placeholder.includes('ktp') ||
+                                name.includes('nik') || name.includes('ktp') ||
+                                id.includes('nik') || id.includes('ktp');
                         });
                     });
                 } catch (e) {
                     isInputPageReady = false;
                 }
-                
+
                 if (!isInputPageReady) {
                     await sleep(1000);
                     waitingAttempts++;
@@ -469,11 +1275,11 @@ async function run() {
                             const inputs = Array.from(document.querySelectorAll('input'));
                             return inputs.some(input => {
                                 const rect = input.getBoundingClientRect();
-                                return rect.width > 0 && rect.height > 0 && 
-                                       (input.getAttribute('placeholder') || '').toLowerCase().includes('nik');
+                                return rect.width > 0 && rect.height > 0 &&
+                                    (input.getAttribute('placeholder') || '').toLowerCase().includes('nik');
                             });
                         });
-                        
+
                         if (hasDashboardUrl || hasNikInput) {
                             isDashboardReady = true;
                             break;
@@ -495,21 +1301,21 @@ async function run() {
                                 });
                                 return hasModalText && hasVisibleInput;
                             });
-                            
+
                             if (!nikInputExist) {
                                 console.log('Membuka kembali modal "Catat Penjualan"...');
                                 const catatPenjualanBtn = await findButtonByKeywords(page, ['Catat Penjualan']);
                                 if (catatPenjualanBtn) {
                                     await catatPenjualanBtn.click();
-                                    
+
                                     let opened = false;
                                     for (let w = 0; w < 10; w++) {
                                         opened = await page.evaluate(() => {
                                             const inputs = Array.from(document.querySelectorAll('input'));
                                             return inputs.some(input => {
                                                 const rect = input.getBoundingClientRect();
-                                                return rect.width > 0 && rect.height > 0 && 
-                                                       (input.getAttribute('placeholder') || '').toLowerCase().includes('nik');
+                                                return rect.width > 0 && rect.height > 0 &&
+                                                    (input.getAttribute('placeholder') || '').toLowerCase().includes('nik');
                                             });
                                         });
                                         if (opened) break;
@@ -518,7 +1324,7 @@ async function run() {
                                 }
                             }
                         }
-                    } catch (e) {}
+                    } catch (e) { }
 
                     // Input NIK
                     console.log('Menginput NIK...');
@@ -527,7 +1333,7 @@ async function run() {
                     if (NIK_SELECTOR && NIK_SELECTOR !== '#nik-input-id') {
                         try {
                             nikInput = await page.waitForSelector(NIK_SELECTOR, { timeout: 3000 });
-                        } catch (e) {}
+                        } catch (e) { }
                     }
                     if (!nikInput) {
                         nikInput = await findInputByKeywords(page, ['nik', 'ktp', 'identity']);
@@ -545,7 +1351,7 @@ async function run() {
                     await sleep(200);
                     await nikInput.type(trx.nik, { delay: 60 });
                     await page.keyboard.press('Tab'); // Pancing onBlur alami
-                    
+
                     // Pancing event change React (Anti-deteksi)
                     await page.evaluate((el) => {
                         if (el) {
@@ -559,7 +1365,7 @@ async function run() {
                     if (CARI_SELECTOR && CARI_SELECTOR !== '#btn-cari-id') {
                         try {
                             cariBtn = await page.$(CARI_SELECTOR);
-                        } catch (e) {}
+                        } catch (e) { }
                     }
                     if (!cariBtn) {
                         cariBtn = await findButtonByKeywords(page, ['lanjutkan penjualan', 'lanjutkan', 'cari', 'cek', 'search', 'find']);
@@ -577,14 +1383,14 @@ async function run() {
 
                     let searchState = null;
                     let errorMsg = '';
-                    
+
                     for (let attempt = 0; attempt < 20; attempt++) {
                         const pageData = await page.evaluate(() => {
                             const txt = document.body.textContent.toLowerCase();
-                            
-                            const isStokKosong = txt.includes('stok tabung yang dapat dijual kosong') || 
-                                                 txt.includes('stok kosong') ||
-                                                 txt.includes('lakukan penebusan');
+
+                            const isStokKosong = txt.includes('stok tabung yang dapat dijual kosong') ||
+                                txt.includes('stok kosong') ||
+                                txt.includes('lakukan penebusan');
                             if (isStokKosong) {
                                 return { state: 'stok_kosong' };
                             }
@@ -603,13 +1409,13 @@ async function run() {
                                 return { state: 'qty' };
                             }
 
-                            const isError = txt.includes('tidak terdaftar') || 
-                                            txt.includes('tidak ditemukan') || 
-                                            txt.includes('nik salah') ||
-                                            txt.includes('belum 17 tahun') ||
-                                            txt.includes('meninggal') ||
-                                            txt.includes('lengkapi nib') ||
-                                            txt.includes('nib sebelum');
+                            const isError = txt.includes('tidak terdaftar') ||
+                                txt.includes('tidak ditemukan') ||
+                                txt.includes('nik salah') ||
+                                txt.includes('belum 17 tahun') ||
+                                txt.includes('meninggal') ||
+                                txt.includes('lengkapi nib') ||
+                                txt.includes('nib sebelum');
                             if (isError) {
                                 let detailedMsg = 'NIK tidak terdaftar atau terjadi error di portal Pertamina.';
                                 if (txt.includes('belum 17 tahun')) {
@@ -662,7 +1468,7 @@ async function run() {
                     // --- STATE A: LIMIT EXCEEDED ---
                     if (searchState === 'limit') {
                         console.log('⚠️ Pelanggan melebihi batas kewajaran pembelian (Limit Habis Nasional).');
-                        
+
                         const tutupBtn = await findButtonByKeywords(page, ['TUTUP', 'BATAL']);
                         if (tutupBtn) {
                             await tutupBtn.click();
@@ -687,7 +1493,7 @@ async function run() {
                     // --- STATE B: ERROR/TIDAK TERDAFTAR ---
                     if (searchState === 'error') {
                         console.log(`⚠️ ${errorMsg}`);
-                        
+
                         const tutupBtn = await findButtonByKeywords(page, ['TUTUP', 'OK', 'KEMBALI']);
                         if (tutupBtn) {
                             await tutupBtn.click();
@@ -761,7 +1567,7 @@ async function run() {
                         throw new Error('Tombol "CEK PESANAN" tidak ditemukan.');
                     }
                     await cekPesananBtn.click();
-                    
+
                     let ringkasanReady = false;
                     for (let attempt = 0; attempt < 10; attempt++) {
                         ringkasanReady = await page.evaluate(() => {
@@ -784,6 +1590,7 @@ async function run() {
                     await sleep(3000);
 
                     // CAPTCHA
+
                     console.log('Mendeteksi Captcha Keamanan di browser.');
                     console.log('==================================================================');
                     console.log('==> [TINDAKAN ANDA] SILAKAN SELESAIKAN CAPTCHA PUZZLE DI CHROME! <==');
@@ -791,17 +1598,12 @@ async function run() {
 
                     let isCaptchaSolved = false;
                     let captchaCheckAttempts = 0;
+                    let solverTries = 0;
 
                     while (!isCaptchaSolved) {
-                        let hasCaptcha = false;
-                        try {
-                            hasCaptcha = await page.evaluate(() => {
-                                const txt = document.body.textContent;
-                                return txt.includes('Cocokan Gambar') || txt.includes('GESER tombol');
-                            });
-                        } catch (e) {
-                            hasCaptcha = false;
-                        }
+                        // Cari frame captcha secara cerdas (mendukung iframe)
+                        const captchaFrame = await findCaptchaFrame(page);
+                        const hasCaptcha = (captchaFrame !== null);
 
                         if (!hasCaptcha) {
                             let backToInputPage = false;
@@ -828,8 +1630,9 @@ async function run() {
                                     isStillOnSummary = false;
                                 }
 
-                                if (isStillOnSummary) {
-                                    throw new Error('Captcha ditutup atau dibatalkan oleh pengguna.');
+                                if (!isStillOnSummary) {
+                                    console.log('✓ Captcha selesai, halaman berpindah ke riwayat/dashboard.');
+                                    isCaptchaSolved = true;
                                 } else {
                                     const pageText = await page.evaluate(() => document.body.textContent.toLowerCase());
                                     const pageUrl = page.url().toLowerCase();
@@ -844,10 +1647,20 @@ async function run() {
                                 }
                             }
                         } else {
-                            await sleep(1500);
-                            captchaCheckAttempts++;
-                            if (captchaCheckAttempts % 8 === 0) {
-                                console.log('Sedang menunggu Anda menggeser puzzle CAPTCHA...');
+                            // Coba jalankan sistem In-House Solver kita
+                            if (solverTries < 5) {
+                                solverTries++;
+                                console.log(`Mencoba meretas Jigsaw Captcha (Percobaan ke-${solverTries})...`);
+                                const solveSuccess = await autoSolveSliderCaptcha(page);
+                                if (!solveSuccess && solverTries >= 5) {
+                                    console.log('Bot In-House menyerah setelah 5 kali gagal. Menunggu bantuan manual Anda di layar browser...');
+                                }
+                            } else {
+                                await sleep(1500);
+                                captchaCheckAttempts++;
+                                if (captchaCheckAttempts % 8 === 0) {
+                                    console.log('Sedang menunggu Anda menggeser puzzle CAPTCHA secara manual...');
+                                }
                             }
                         }
                     }
@@ -862,7 +1675,7 @@ async function run() {
                     try {
                         await page.goto(PERTAMINA_URL, { waitUntil: 'domcontentloaded' });
                         await sleep(2000);
-                    } catch (e) {}
+                    } catch (e) { }
 
                 } catch (err) {
                     console.error(`✗ Gagal memproses NIK ${trx.nik}:`, err.message);
@@ -880,7 +1693,7 @@ async function run() {
                         if (!isLoginPage && page.url().includes('login')) {
                             isLoginPage = true;
                         }
-                    } catch (e) {}
+                    } catch (e) { }
 
                     if (isLoginPage) {
                         console.log('⚠️ Peringatan: Sesi telah berakhir (dipental ke halaman login).');
@@ -899,7 +1712,7 @@ async function run() {
                             try {
                                 await page.goto(PERTAMINA_URL, { waitUntil: 'domcontentloaded' });
                                 await sleep(3000);
-                            } catch (e) {}
+                            } catch (e) { }
                             i--; // Mundurkan index i agar memproses NIK yang sama di iterasi berikutnya
                             continue;
                         } else {
@@ -916,14 +1729,14 @@ async function run() {
                             await api.post(`/api/gagal-lapor/${trx.id}`, {
                                 message: `Gagal: Melebihi batas kewajaran pembelian LPG 3 kg bulan ini.`
                             });
-                        } catch (e) {}
+                        } catch (e) { }
                     } else {
                         failCount++;
                         try {
                             await api.post(`/api/gagal-lapor/${trx.id}`, {
                                 message: `Error Bot: ${err.message}`
                             });
-                        } catch (e) {}
+                        } catch (e) { }
                     }
 
                     if (pangkalanStokHabis) {
@@ -945,7 +1758,7 @@ async function run() {
                         try {
                             await page.goto(PERTAMINA_URL, { waitUntil: 'domcontentloaded' });
                             await sleep(2000);
-                        } catch (err2) {}
+                        } catch (err2) { }
                     }
                 }
             }
