@@ -1,0 +1,25 @@
+{
+  "apps": [
+    {
+      "name": "reverb-pos",
+      "script": "artisan",
+      "interpreter": "php",
+      "args": "reverb:start --host=127.0.0.1 --port=8080",
+      "cwd": "d:\\laragon\\www\\pos-anom"
+    },
+    {
+      "name": "reverb-gas",
+      "script": "artisan",
+      "interpreter": "php",
+      "args": "reverb:start --host=127.0.0.1 --port=8081",
+      "cwd": "d:\\laragon\\www\\gas"
+    },
+    {
+      "name": "queue-gas",
+      "script": "artisan",
+      "interpreter": "php",
+      "args": "queue:work",
+      "cwd": "d:\\laragon\\www\\gas"
+    }
+  ]
+}

@@ -63,11 +63,20 @@ class TransaksiGasController extends Controller
             ->whereIn('status', ['pending', 'processing'])
             ->exists();
 
+        $now = Carbon::now();
+        $rpaSummary = [
+            'total' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->count(),
+            'sukses' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'sukses')->count(),
+            'belum_lapor' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'belum_lapor')->count(),
+            'gagal' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'gagal')->count(),
+        ];
+
         return Inertia::render('TransaksiGas/Index', [
             'transaksis' => $transaksis,
             'pangkalans' => $pangkalans,
             'filters' => $request->only(['search', 'status_lapor', 'akun_pangkalan_id', 'tanggal']),
             'activeSync' => $activeSync,
+            'rpaSummary' => $rpaSummary,
         ]);
     }
 

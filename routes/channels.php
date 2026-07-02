@@ -10,3 +10,8 @@ Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
 Broadcast::channel('audit-progress.{userId}', function ($user, $userId) {
     return (int) $user->id === (int) $userId;
 });
+
+// Channel private untuk progress sinkronisasi RPA per user
+Broadcast::channel('rpa-progress.{userId}', function ($user, $userId) {
+    return (int) $user->id === (int) $userId;
+});

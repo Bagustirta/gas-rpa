@@ -162,7 +162,7 @@ class ApiLpgController extends Controller
      */
     public function konfirmasiLapor(Request $request, int $id): JsonResponse
     {
-        $transaksi = TransaksiGas::with('pelanggan:id,nik')->find($id);
+        $transaksi = TransaksiGas::with(['pelanggan:id,nik', 'akunPangkalan:id,user_id'])->find($id);
 
         if (!$transaksi) {
             return response()->json([
@@ -194,6 +194,18 @@ class ApiLpgController extends Controller
             'status_lapor'         => 'sukses',
             'catatan_lapor'        => $catatan,
         ]);
+
+        $userId = $transaksi->akunPangkalan->user_id ?? null;
+        if ($userId) {
+            $now = Carbon::now();
+            $summary = [
+                'total' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->count(),
+                'sukses' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'sukses')->count(),
+                'belum_lapor' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'belum_lapor')->count(),
+                'gagal' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'gagal')->count(),
+            ];
+            event(new \App\Events\RpaProgressUpdated($userId, 'Transaksi ID ' . $transaksi->id . ' sukses dilaporkan', $transaksi->id, 'sukses', $summary));
+        }
 
         return response()->json([
             'status'  => 'success',
@@ -347,6 +359,18 @@ class ApiLpgController extends Controller
 
         $sync->update($data);
 
+        if (in_array($data['status'], ['completed', 'failed'])) {
+            $now = Carbon::now();
+            $userId = $sync->user_id;
+            $summary = [
+                'total' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->count(),
+                'sukses' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'sukses')->count(),
+                'belum_lapor' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'belum_lapor')->count(),
+                'gagal' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'gagal')->count(),
+            ];
+            event(new \App\Events\RpaProgressUpdated($userId, 'Sync ' . $data['status'], null, $data['status'], $summary));
+        }
+
         return response()->json([
             'status' => 'success',
             'sync'   => $sync,
@@ -360,7 +384,7 @@ class ApiLpgController extends Controller
      */
     public function gagalLapor(Request $request, int $id): JsonResponse
     {
-        $transaksi = TransaksiGas::with('pelanggan:id,nik')->find($id);
+        $transaksi = TransaksiGas::with(['pelanggan:id,nik', 'akunPangkalan:id,user_id'])->find($id);
 
         if (!$transaksi) {
             return response()->json([
@@ -420,6 +444,18 @@ class ApiLpgController extends Controller
                     ]);
                 }
             }
+        }
+
+        $userId = $transaksi->akunPangkalan->user_id ?? null;
+        if ($userId) {
+            $now = Carbon::now();
+            $summary = [
+                'total' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->count(),
+                'sukses' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'sukses')->count(),
+                'belum_lapor' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'belum_lapor')->count(),
+                'gagal' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'gagal')->count(),
+            ];
+            event(new \App\Events\RpaProgressUpdated($userId, 'Transaksi ID ' . $transaksi->id . ' gagal dilaporkan', $transaksi->id, 'gagal', $summary));
         }
 
         return response()->json([

@@ -73,6 +73,36 @@
         </div>
       </div>
 
+      <!-- RPA Progress Card (Mobile Optimized) -->
+      <div v-if="page.props.activeSync" class="bg-indigo-600 rounded-2xl p-4 md:p-5 shadow-lg shadow-indigo-200 text-white relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <!-- SVG background pattern -->
+        <div class="absolute inset-0 opacity-10 pointer-events-none">
+          <svg width="100%" height="100%" fill="none"><pattern id="pattern-circles" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="2" fill="currentColor"></circle></pattern><rect x="0" y="0" width="100%" height="100%" fill="url(#pattern-circles)"></rect></svg>
+        </div>
+        <div class="relative z-10 w-full md:w-auto text-center md:text-left">
+           <h3 class="font-bold text-lg text-white mb-0.5">Progres RPA Pertamina</h3>
+           <p class="text-indigo-200 text-xs font-medium">Bulan berjalan ({{ new Date().toLocaleString('id-ID', { month: 'long', year: 'numeric' }) }})</p>
+        </div>
+        <div class="relative z-10 flex items-center justify-between md:justify-end gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 hide-scrollbar">
+           <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl p-3 flex flex-col items-center min-w-[80px]">
+              <span class="text-2xl font-black text-emerald-400 drop-shadow-sm">{{ rpaSummary.sukses }}</span>
+              <span class="text-[10px] uppercase tracking-wider font-semibold text-indigo-100 mt-1">Sukses</span>
+           </div>
+           <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl p-3 flex flex-col items-center min-w-[80px]">
+              <span class="text-2xl font-black text-amber-300 drop-shadow-sm animate-pulse">{{ rpaSummary.belum_lapor }}</span>
+              <span class="text-[10px] uppercase tracking-wider font-semibold text-indigo-100 mt-1">Antre</span>
+           </div>
+           <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl p-3 flex flex-col items-center min-w-[80px]">
+              <span class="text-2xl font-black text-rose-400 drop-shadow-sm">{{ rpaSummary.gagal }}</span>
+              <span class="text-[10px] uppercase tracking-wider font-semibold text-indigo-100 mt-1">Gagal</span>
+           </div>
+           <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl p-3 flex flex-col items-center min-w-[80px]">
+              <span class="text-2xl font-black text-white drop-shadow-sm">{{ rpaSummary.total }}</span>
+              <span class="text-[10px] uppercase tracking-wider font-semibold text-indigo-100 mt-1">Total</span>
+           </div>
+        </div>
+      </div>
+
       <!-- Filters & Search Bar -->
       <div class="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-center shadow-sm">
         <!-- Search NIK -->
@@ -450,12 +480,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { usePage, useForm, router, Link } from '@inertiajs/vue3';
 import AppLayout from '../../Layouts/AppLayout.vue';
 
 const page = usePage();
+const authUserId = computed(() => page.props.auth.user.id);
 const transaksis = computed(() => page.props.transaksis);
+const rpaSummary = computed(() => page.props.rpaSummary || { total: 0, sukses: 0, belum_lapor: 0, gagal: 0 });
 const pangkalans = computed(() => page.props.pangkalans);
 
 const filters = reactive({
@@ -643,9 +675,32 @@ const submitDistribusi = () => {
     }
   });
 };
+
+onMounted(() => {
+  if (window.Echo && authUserId.value) {
+    window.Echo.private(`rpa-progress.${authUserId.value}`)
+      .listen('RpaProgressUpdated', (e) => {
+        // Otomatis refresh data (tabel dan card summary) tanpa reload halaman full
+        router.reload({ only: ['transaksis', 'rpaSummary', 'activeSync'], preserveScroll: true });
+      });
+  }
+});
+
+onUnmounted(() => {
+  if (window.Echo && authUserId.value) {
+    window.Echo.leave(`rpa-progress.${authUserId.value}`);
+  }
+});
 </script>
 
 <style scoped>
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
 .text-slate-850 {
   color: rgb(30, 41, 59);
 }
