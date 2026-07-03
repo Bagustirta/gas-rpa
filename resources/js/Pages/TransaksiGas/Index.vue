@@ -754,11 +754,31 @@ const submitDistribusi = () => {
 };
 
 onMounted(() => {
+  // 1. Minta Izin Notifikasi Browser
+  if ("Notification" in window) {
+    if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+      Notification.requestPermission();
+    }
+  }
+
+  // 2. Dengarkan Siaran WebSockets
   if (window.Echo && authUserId.value) {
     window.Echo.private(`rpa-progress.${authUserId.value}`)
       .listen('RpaProgressUpdated', (e) => {
         // Otomatis refresh data (tabel dan card summary) tanpa reload halaman full
         router.reload({ only: ['transaksis', 'rpaSummary', 'activeSync'], preserveScroll: true });
+
+        // 3. Tampilkan Notifikasi Desktop jika tugas Bot selesai atau gagal
+        if (e.status === 'completed' || e.status === 'failed' || e.message?.toLowerCase().includes('selesai')) {
+          if ("Notification" in window && Notification.permission === "granted") {
+            const title = e.status === 'completed' ? 'Bot RPA Selesai!' : 'Update Bot RPA';
+            const icon = e.status === 'completed' ? '/favicon.ico' : '/favicon.ico';
+            new Notification(title, {
+              body: e.message || 'Tugas sinkronisasi telah selesai dikerjakan.',
+              icon: icon
+            });
+          }
+        }
       });
   }
 });
