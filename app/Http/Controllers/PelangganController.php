@@ -26,7 +26,7 @@ class PelangganController extends Controller
             }], 'jumlah_tabung');
 
         if ($request->filled('search')) {
-            $query->where('nik', 'like', '%' . $request->search . '%');
+            $query->where('nik_bindex', hash_hmac('sha256', $request->search, config('app.key')));
         }
 
         if ($request->filled('status')) {
@@ -75,13 +75,19 @@ class PelangganController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'nik' => ['required', 'string', 'size:16', 'regex:/^\d{16}$/', 'unique:pelanggan,nik'],
+            'nik' => [
+                'required', 'string', 'size:16', 'regex:/^\d{16}$/',
+                function ($attribute, $value, $fail) {
+                    if (Pelanggan::where('nik_bindex', hash_hmac('sha256', $value, config('app.key')))->exists()) {
+                        $fail('NIK sudah terdaftar.');
+                    }
+                }
+            ],
             'status' => ['required', 'boolean'],
         ], [
             'nik.required' => 'NIK wajib diisi.',
             'nik.size' => 'NIK harus tepat 16 digit.',
             'nik.regex' => 'NIK hanya boleh berisi angka.',
-            'nik.unique' => 'NIK sudah terdaftar.',
         ]);
 
         Pelanggan::create([
@@ -100,13 +106,20 @@ class PelangganController extends Controller
         }
 
         $validated = $request->validate([
-            'nik' => ['required', 'string', 'size:16', 'regex:/^\d{16}$/', 'unique:pelanggan,nik,' . $pelanggan->id],
+            'nik' => [
+                'required', 'string', 'size:16', 'regex:/^\d{16}$/',
+                function ($attribute, $value, $fail) use ($pelanggan) {
+                    if (Pelanggan::where('nik_bindex', hash_hmac('sha256', $value, config('app.key')))
+                        ->where('id', '!=', $pelanggan->id)->exists()) {
+                        $fail('NIK sudah terdaftar pada pelanggan lain.');
+                    }
+                }
+            ],
             'status' => ['required', 'boolean'],
         ], [
             'nik.required' => 'NIK wajib diisi.',
             'nik.size' => 'NIK harus tepat 16 digit.',
             'nik.regex' => 'NIK hanya boleh berisi angka.',
-            'nik.unique' => 'NIK sudah terdaftar.',
         ]);
 
         $pelanggan->update($validated);

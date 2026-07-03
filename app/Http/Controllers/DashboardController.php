@@ -49,7 +49,7 @@ class DashboardController extends Controller
             ->where('status', true);
 
         if ($request->filled('search')) {
-            $query->where('nik', 'like', '%' . $request->search . '%');
+            $query->where('nik_bindex', hash_hmac('sha256', $request->search, config('app.key')));
         }
 
         $subquery = TransaksiGas::selectRaw('coalesce(sum(jumlah_tabung), 0)')

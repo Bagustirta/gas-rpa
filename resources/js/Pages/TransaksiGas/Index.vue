@@ -73,32 +73,89 @@
         </div>
       </div>
 
-      <!-- RPA Progress Card (Mobile Optimized) -->
-      <div v-if="page.props.activeSync" class="bg-indigo-600 rounded-2xl p-4 md:p-5 shadow-lg shadow-indigo-200 text-white relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <!-- RPA Progress Card (Mobile Optimized & Carousel) -->
+      <div v-if="page.props.activeSync" class="bg-indigo-600 rounded-2xl p-4 md:p-5 shadow-lg shadow-indigo-200 text-white relative flex flex-col md:flex-row justify-between items-start md:items-center gap-4 group">
         <!-- SVG background pattern -->
-        <div class="absolute inset-0 opacity-10 pointer-events-none">
+        <div class="absolute inset-0 opacity-10 pointer-events-none rounded-2xl overflow-hidden">
           <svg width="100%" height="100%" fill="none"><pattern id="pattern-circles" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="2" fill="currentColor"></circle></pattern><rect x="0" y="0" width="100%" height="100%" fill="url(#pattern-circles)"></rect></svg>
         </div>
-        <div class="relative z-10 w-full md:w-auto text-center md:text-left">
-           <h3 class="font-bold text-lg text-white mb-0.5">Progres RPA Pertamina</h3>
-           <p class="text-indigo-200 text-xs font-medium">Bulan berjalan ({{ new Date().toLocaleString('id-ID', { month: 'long', year: 'numeric' }) }})</p>
+        
+        <div class="relative z-10 w-full md:w-auto text-center md:text-left flex-shrink-0">
+           <h3 class="font-bold text-lg text-white mb-0.5">
+             Progres RPA Pertamina
+             <span v-if="rpaSlides.length > 1" class="ml-2 px-2 py-0.5 rounded-full bg-white/20 text-xs font-bold">{{ activeSlide === 0 ? 'Global' : rpaSlides[activeSlide].nama_pangkalan }}</span>
+           </h3>
+           <p v-if="rpaSummary.current_pangkalan && activeSlide === 0" class="text-indigo-200 text-xs font-medium">
+              Sedang memproses: <span class="font-bold text-white">{{ rpaSummary.current_pangkalan }}</span>
+           </p>
+           <p v-else-if="activeSlide > 0" class="text-indigo-200 text-xs font-medium">
+              Rincian pangkalan khusus
+           </p>
+           <p v-else class="text-indigo-200 text-xs font-medium">
+              Mempersiapkan Bot RPA...
+           </p>
         </div>
-        <div class="relative z-10 flex items-center justify-between md:justify-end gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 hide-scrollbar">
-           <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl p-3 flex flex-col items-center min-w-[80px]">
-              <span class="text-2xl font-black text-emerald-400 drop-shadow-sm">{{ rpaSummary.sukses }}</span>
-              <span class="text-[10px] uppercase tracking-wider font-semibold text-indigo-100 mt-1">Sukses</span>
+        
+        <div class="relative z-10 flex flex-wrap items-center justify-center md:justify-end gap-2 w-full overflow-hidden hide-scrollbar">
+           
+           <button v-if="rpaSlides.length > 1" @click="activeSlide = activeSlide > 0 ? activeSlide - 1 : rpaSlides.length - 1" class="absolute left-0 top-1/2 -translate-y-1/2 -ml-2 p-1.5 rounded-full bg-indigo-800/50 hover:bg-indigo-800 text-white shadow-md z-20 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+           </button>
+
+           <div class="flex flex-wrap items-center justify-center md:justify-end gap-2 w-full transition-all duration-300">
+             <!-- Blok Sukses -->
+             <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl px-4 py-3 flex flex-col items-center justify-center min-w-[85px]">
+                <div class="flex items-center gap-1.5 mb-0.5">
+                   <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                   <span class="text-xs uppercase tracking-wider font-bold text-indigo-100">Sukses</span>
+                </div>
+                <span class="text-3xl font-black text-emerald-400 drop-shadow-sm">{{ rpaSlides[activeSlide].sukses }}</span>
+             </div>
+             
+             <!-- Blok Limit -->
+             <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl px-4 py-3 flex flex-col items-center justify-center min-w-[85px]">
+                <div class="flex items-center gap-1.5 mb-0.5">
+                   <svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                   <span class="text-xs uppercase tracking-wider font-bold text-indigo-100">Limit</span>
+                </div>
+                <span class="text-3xl font-black text-blue-400 drop-shadow-sm">{{ rpaSlides[activeSlide].kuota_habis || 0 }}</span>
+             </div>
+             
+             <!-- Blok Antre -->
+             <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl px-4 py-3 flex flex-col items-center justify-center min-w-[85px]">
+                <div class="flex items-center gap-1.5 mb-0.5">
+                   <svg class="w-4 h-4 text-amber-300 animate-spin-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 11H19.21"></path></svg>
+                   <span class="text-xs uppercase tracking-wider font-bold text-indigo-100">Antre</span>
+                </div>
+                <span class="text-3xl font-black text-amber-300 drop-shadow-sm" :class="{ 'animate-pulse': rpaSlides[activeSlide].belum_lapor > 0 }">{{ rpaSlides[activeSlide].belum_lapor }}</span>
+             </div>
+             
+             <!-- Blok Gagal -->
+             <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl px-4 py-3 flex flex-col items-center justify-center min-w-[85px]">
+                <div class="flex items-center gap-1.5 mb-0.5">
+                   <svg class="w-4 h-4 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                   <span class="text-xs uppercase tracking-wider font-bold text-indigo-100">Gagal</span>
+                </div>
+                <span class="text-3xl font-black text-rose-400 drop-shadow-sm">{{ rpaSlides[activeSlide].gagal }}</span>
+             </div>
+             
+             <!-- Blok Total -->
+             <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl px-4 py-3 flex flex-col items-center justify-center min-w-[85px]">
+                <div class="flex items-center gap-1.5 mb-0.5">
+                   <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                   <span class="text-xs uppercase tracking-wider font-bold text-indigo-100">Total</span>
+                </div>
+                <span class="text-3xl font-black text-white drop-shadow-sm">{{ rpaSlides[activeSlide].total }}</span>
+             </div>
            </div>
-           <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl p-3 flex flex-col items-center min-w-[80px]">
-              <span class="text-2xl font-black text-amber-300 drop-shadow-sm animate-pulse">{{ rpaSummary.belum_lapor }}</span>
-              <span class="text-[10px] uppercase tracking-wider font-semibold text-indigo-100 mt-1">Antre</span>
-           </div>
-           <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl p-3 flex flex-col items-center min-w-[80px]">
-              <span class="text-2xl font-black text-rose-400 drop-shadow-sm">{{ rpaSummary.gagal }}</span>
-              <span class="text-[10px] uppercase tracking-wider font-semibold text-indigo-100 mt-1">Gagal</span>
-           </div>
-           <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl p-3 flex flex-col items-center min-w-[80px]">
-              <span class="text-2xl font-black text-white drop-shadow-sm">{{ rpaSummary.total }}</span>
-              <span class="text-[10px] uppercase tracking-wider font-semibold text-indigo-100 mt-1">Total</span>
+
+           <button v-if="rpaSlides.length > 1" @click="activeSlide = activeSlide < rpaSlides.length - 1 ? activeSlide + 1 : 0" class="absolute right-0 top-1/2 -translate-y-1/2 -mr-2 p-1.5 rounded-full bg-indigo-800/50 hover:bg-indigo-800 text-white shadow-md z-20 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+           </button>
+           
+           <!-- Carousel Dots Indicator -->
+           <div v-if="rpaSlides.length > 1" class="absolute -bottom-1 left-1/2 -translate-x-1/2 flex space-x-1.5">
+              <button v-for="(_, i) in rpaSlides" :key="i" @click="activeSlide = i" :class="activeSlide === i ? 'w-4 bg-white' : 'w-1.5 bg-white/40'" class="h-1.5 rounded-full transition-all duration-300"></button>
            </div>
         </div>
       </div>
@@ -132,6 +189,7 @@
             <option value="belum_lapor">Belum Lapor</option>
             <option value="proses">Proses Antrean</option>
             <option value="sukses">Sukses Dilaporkan</option>
+            <option value="kuota_habis">Limit Pertamina</option>
             <option value="gagal">Gagal Dilaporkan</option>
           </select>
         </div>
@@ -237,6 +295,7 @@
                     <span :class="[
                       'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border',
                       t.status_lapor === 'sukses' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                      t.status_lapor === 'kuota_habis' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                       t.status_lapor === 'gagal' ? 'bg-red-50 text-red-700 border-red-200' :
                       t.status_lapor === 'proses' ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse' :
                       'bg-slate-100 text-slate-500 border-slate-200'
@@ -487,8 +546,26 @@ import AppLayout from '../../Layouts/AppLayout.vue';
 const page = usePage();
 const authUserId = computed(() => page.props.auth.user.id);
 const transaksis = computed(() => page.props.transaksis);
-const rpaSummary = computed(() => page.props.rpaSummary || { total: 0, sukses: 0, belum_lapor: 0, gagal: 0 });
+const rpaSummary = computed(() => page.props.rpaSummary || { total: 0, sukses: 0, kuota_habis: 0, belum_lapor: 0, gagal: 0, breakdowns: [] });
 const pangkalans = computed(() => page.props.pangkalans);
+
+// Carousel state
+const activeSlide = ref(0);
+const rpaSlides = computed(() => {
+  const sum = rpaSummary.value;
+  const slides = [{
+    nama_pangkalan: 'Total Global',
+    total: sum.total || 0,
+    sukses: sum.sukses || 0,
+    kuota_habis: sum.kuota_habis || 0,
+    belum_lapor: sum.belum_lapor || 0,
+    gagal: sum.gagal || 0
+  }];
+  if (sum.breakdowns && sum.breakdowns.length > 0) {
+    slides.push(...sum.breakdowns);
+  }
+  return slides;
+});
 
 const filters = reactive({
   search: page.props.filters?.search || '',

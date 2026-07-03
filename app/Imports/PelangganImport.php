@@ -56,8 +56,9 @@ class PelangganImport implements
 
             // Insert jika baru, abaikan jika sudah ada agar status terakhir (aktif/nonaktif) tetap terjaga
             Pelanggan::firstOrCreate(
-                ['nik' => $rowData['nik']],
+                ['nik_bindex' => hash_hmac('sha256', $rowData['nik'], config('app.key'))],
                 [
+                    'nik' => $rowData['nik'],
                     'status' => true,
                     'user_id' => $this->userId,
                 ]

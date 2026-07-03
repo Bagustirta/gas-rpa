@@ -20,6 +20,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'is_active',
     ];
 
     /**
@@ -53,5 +55,10 @@ class User extends Authenticatable
     public function pelanggans(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(Pelanggan::class, 'user_id');
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'super_admin';
     }
 }

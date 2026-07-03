@@ -22,7 +22,8 @@ class TransaksiGasController extends Controller
 
         if ($request->filled('search')) {
             $query->whereHas('pelanggan', function ($q) use ($request) {
-                $q->where('nik', 'like', '%' . $request->search . '%');
+                // Pencarian sekarang membutuhkan NIK persis sama (karena terenkripsi)
+                $q->where('nik_bindex', hash_hmac('sha256', $request->search, config('app.key')));
             });
         }
 
@@ -59,17 +60,23 @@ class TransaksiGasController extends Controller
 
         $pangkalans = AkunPangkalan::where('user_id', $userId)->orderBy('nama_pangkalan')->get();
 
-        $activeSync = \App\Models\RpaSync::where('user_id', $userId)
+        $activeSyncModel = \App\Models\RpaSync::where('user_id', $userId)
             ->whereIn('status', ['pending', 'processing'])
-            ->exists();
+            ->first();
+            
+        $activeSync = $activeSyncModel ? true : false;
 
-        $now = Carbon::now();
         $rpaSummary = [
-            'total' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->count(),
-            'sukses' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'sukses')->count(),
-            'belum_lapor' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'belum_lapor')->count(),
-            'gagal' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'gagal')->count(),
+            'total' => 0,
+            'sukses' => 0,
+            'belum_lapor' => 0,
+            'gagal' => 0,
+            'current_pangkalan' => null,
         ];
+
+        if ($activeSyncModel) {
+            $rpaSummary = $activeSyncModel->calculateSummary();
+        }
 
         return Inertia::render('TransaksiGas/Index', [
             'transaksis' => $transaksis,
@@ -84,7 +91,7 @@ class TransaksiGasController extends Controller
     {
         $nik = $request->nik;
         $pelanggan = Pelanggan::where('user_id', Auth::id())
-            ->where('nik', $nik)
+            ->where('nik_bindex', hash_hmac('sha256', $nik, config('app.key')))
             ->where('status', true)
             ->first();
 
@@ -300,18 +307,8 @@ class TransaksiGasController extends Controller
             'user_id' => $userId,
         ]);
 
-        // Panggil Bot RPA secara otomatis di Windows
-        // Gunakan VBScript + WScript.Shell agar CMD window terbuka meski PHP berjalan sebagai service
-        if (str_contains(PHP_OS_FAMILY, 'Windows')) {
-            $botPath = str_replace('/', '\\', base_path('rpa-bot'));
-            $cmd = "node bot.js --sync-id={$sync->id}";
-            $vbs = sys_get_temp_dir() . '\\rpa_run_' . $sync->id . '.vbs';
-            // VBScript: gunakan ""  (dua kutip) untuk escape quote di dalam string
-            $vbsContent = "Set oShell = CreateObject(\"WScript.Shell\")\r\n";
-            $vbsContent .= "oShell.Run \"cmd.exe /k cd /d \"\"" . $botPath . "\"\" && " . $cmd . "\", 1, False\r\n";
-            file_put_contents($vbs, $vbsContent);
-            pclose(popen("wscript.exe \"{$vbs}\"", "r"));
-        }
+        // VBScript dihapus karena sekarang kita menggunakan PM2 Daemon Worker
+        // Daemon (bot.js) yang berjalan di latar belakang akan otomatis mengambil job 'pending' ini.
 
         return redirect()->route('transaksi-gas.index')->with('success', "Antrean dibuat untuk {$belumLaporCount} transaksi. Bot RPA otomatis berjalan.");
     }

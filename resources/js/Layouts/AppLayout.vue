@@ -171,12 +171,25 @@ const TransaksiIcon = {
 const isMobileMenuOpen = ref(false);
 const page = usePage();
 
-const navLinks = [
-  { route: 'dashboard', label: 'Dashboard', icon: DashboardIcon },
-  { route: 'akun-pangkalan.index', label: 'Akun Pangkalan', icon: KeyIcon },
-  { route: 'pelanggan.index', label: 'Data Pelanggan', icon: UsersIcon },
-  { route: 'transaksi-gas.index', label: 'Transaksi Gas', icon: TransaksiIcon },
-];
+const navLinks = computed(() => {
+  const isSuper = page.props.auth.user?.role === 'super_admin';
+  
+  if (isSuper) {
+    return [
+      { route: 'superadmin.dashboard', label: 'Monitor Server', icon: DashboardIcon },
+      { route: 'users.index', label: 'Manajemen Agen', icon: UsersIcon },
+      // Placeholder for CRUD Role / Status routes that will be added
+    ];
+  }
+
+  // Regular Agent Links
+  return [
+    { route: 'dashboard', label: 'Dashboard', icon: DashboardIcon },
+    { route: 'akun-pangkalan.index', label: 'Akun Pangkalan', icon: KeyIcon },
+    { route: 'pelanggan.index', label: 'Data Pelanggan', icon: UsersIcon },
+    { route: 'transaksi-gas.index', label: 'Transaksi Gas', icon: TransaksiIcon },
+  ];
+});
 
 const toast = ref({
   show: false,
@@ -193,7 +206,7 @@ const isCurrentRoute = (routeName) => {
 };
 
 const currentPageTitle = computed(() => {
-  const currentLink = navLinks.find(link => isCurrentRoute(link.route));
+  const currentLink = navLinks.value.find(link => isCurrentRoute(link.route));
   return currentLink ? currentLink.label : 'Menu';
 });
 

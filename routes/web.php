@@ -20,6 +20,9 @@ Route::middleware('auth')->group(function () {
 
     // Dashboard
     Route::get('/', function () {
+        if (auth()->check() && auth()->user()->isSuperAdmin()) {
+            return redirect()->route('superadmin.dashboard');
+        }
         return redirect()->route('dashboard');
     });
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -55,6 +58,17 @@ Route::middleware('auth')->group(function () {
         Route::post('/audit-quota', [TransaksiGasController::class, 'auditQuota'])->name('audit-quota');
         Route::post('/reset-sync', [TransaksiGasController::class, 'resetSync'])->name('reset-sync');
         Route::post('/distribusi-otomatis', [TransaksiGasController::class, 'distribusiOtomatis'])->name('distribusi-otomatis');
+    });
+    // Super Admin: Manajemen Agen/User & Monitoring
+    Route::middleware('super_admin')->prefix('superadmin')->group(function () {
+        Route::get('/dashboard', [\App\Http\Controllers\SuperAdminController::class, 'dashboard'])->name('superadmin.dashboard');
+        
+        Route::prefix('users')->name('users.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\UserController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\UserController::class, 'store'])->name('store');
+            Route::put('/{user}', [\App\Http\Controllers\UserController::class, 'update'])->name('update');
+            Route::delete('/{user}', [\App\Http\Controllers\UserController::class, 'destroy'])->name('destroy');
+        });
     });
 });
 

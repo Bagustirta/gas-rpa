@@ -15,6 +15,7 @@ class Pelanggan extends Model
 
     protected $fillable = [
         'nik',
+        'nik_bindex',
         'status',
         'user_id',
     ];
@@ -26,11 +27,18 @@ class Pelanggan extends Model
                 $model->user_id = $model->user_id ?? auth()->id();
             }
         });
+
+        static::saving(function ($model) {
+            if ($model->isDirty('nik')) {
+                // Buat sidik jari statis (Blind Index) untuk fitur pencarian NIK yang persis sama
+                $model->nik_bindex = hash_hmac('sha256', $model->nik, config('app.key'));
+            }
+        });
     }
 
     protected $casts = [
         'status' => 'boolean',
-        'nik'    => 'string',
+        'nik'    => 'encrypted', // Enkripsi Otomatis Laravel Level 2
     ];
 
     /**

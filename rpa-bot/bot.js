@@ -917,14 +917,33 @@ const api = axios.create({
     }
 });
 
-async function run() {
+async function startDaemon() {
     console.log('===================================================');
-    console.log('       BOT RPA SINKRONISASI LPG PERTAMINA         ');
+    console.log('     PM2 QUEUE WORKER RPA LGP PERTAMINA AKTIF      ');
     console.log('===================================================');
     console.log(`Menghubungkan ke Laravel: ${LARAVEL_URL}`);
+    console.log('Pekerja (Worker) sedang berjalan di latar belakang (Daemon Mode)...');
+    
+    while (true) {
+        try {
+            const hasJob = await run();
+            if (!hasJob) {
+                // Sleep 5 seconds before polling again
+                await sleep(5000);
+            } else {
+                // Sleep 2 seconds before grabbing next job to prevent instant loop spin
+                await sleep(2000);
+            }
+        } catch (err) {
+            console.error('✗ Kesalahan kritis pada Daemon Worker:', err.message);
+            await sleep(5000);
+        }
+    }
+}
 
+async function run() {
     try {
-        // Parse arguments
+        // Parse arguments (tetap simpan untuk jaga-jaga kalau mau run manual)
         const args = process.argv.slice(2);
         let targetSyncId = null;
         for (const arg of args) {
@@ -934,24 +953,23 @@ async function run() {
         }
 
         // 1. Memeriksa antrean sinkronisasi
-        console.log('Memeriksa antrean sinkronisasi di database...');
         const syncUrl = targetSyncId ? `/api/rpa-sync/pending?sync_id=${targetSyncId}` : '/api/rpa-sync/pending';
         const syncResponse = await api.get(syncUrl);
         const syncJob = syncResponse.data.sync;
 
         if (!syncJob) {
-            console.log('✓ Tidak ada antrean sinkronisasi yang cocok atau (pending) saat ini.');
-            console.log('Tugas selesai.');
-            return;
+            // Hening saat idle agar log tidak penuh
+            return false;
         }
 
         const syncId = syncJob.id;
         activeSyncId = syncId; // Set ke global untuk cleanup jika Ctrl+C
+        console.log(`\n===================================================`);
         console.log(`Menemukan Job ID #${syncId} (Dibuat pada: ${syncJob.created_at})`);
 
         // 2. Ubah status job ke 'processing'
-        await api.patch(`/api/rpa-sync/${syncId}`, { status: 'processing' });
-        console.log('Status antrean diubah ke: PROCESSING.');
+        // (Status 'processing' sekarang diatur langsung oleh Laravel saat endpoint /pending dipanggil)
+        console.log(`Memproses Antrean untuk Agen (User ID): ${syncJob.user_id}`);
 
         // 3. Ambil daftar seluruh akun pangkalan yang aktif
         console.log('Mengambil daftar akun pangkalan yang terdaftar...');
@@ -966,7 +984,7 @@ async function run() {
                 message: 'Tidak ada akun pangkalan terdaftar untuk login.'
             });
             activeSyncId = null;
-            return;
+            return true;
         }
 
         console.log(`Ditemukan ${pangkalanList.length} akun pangkalan.`);
@@ -984,6 +1002,9 @@ async function run() {
             console.log(`\n---------------------------------------------------`);
             console.log(`[Akun ${pIdx + 1}/${pangkalanList.length}] Login ke: ${pangkalan.nama_pangkalan}`);
             console.log(`---------------------------------------------------`);
+            
+            // Update pangkalan target di database agar bisa dimonitor frontend
+            await api.patch(`/api/rpa-sync/${syncId}`, { current_pangkalan: pangkalan.nama_pangkalan }).catch(() => {});
 
             // Ambil data NIK transaksi yang belum dilaporkan saat ini
             console.log('Mengambil daftar transaksi terupdate...');
@@ -1008,12 +1029,12 @@ async function run() {
 
             console.log(`Sisa transaksi siap lapor: ${transactions.length} baris.`);
 
-            // 4. Buka Browser (Headless: false agar user bisa melihat & intervensi)
-            console.log('Membuka browser otomatis...');
+            // 4. Buka Browser (Headless: true agar jalan di background / gaib)
+            console.log('Membuka browser otomatis (Mode Gaib / Headless)...');
             const browser = await puppeteer.launch({
-                headless: false,
+                headless: true, // Berjalan secara tersembunyi
                 defaultViewport: null,
-                args: ['--start-maximized']
+                args: ['--start-maximized', '--no-sandbox', '--disable-setuid-sandbox']
             });
             activeBrowser = browser; // Set ke global untuk cleanup jika Ctrl+C
 
@@ -1803,9 +1824,18 @@ async function run() {
         console.log(`===================================================`);
 
         activeSyncId = null;
+        return true;
 
     } catch (error) {
         console.error('\n✗ Terjadi Kesalahan Utama pada Bot:', error.message);
+        if (activeSyncId) {
+            await api.patch(`/api/rpa-sync/${activeSyncId}`, {
+                status: 'failed',
+                message: 'Bot Error: ' + error.message
+            }).catch(() => {});
+            activeSyncId = null;
+        }
+        return true;
     }
 }
 
@@ -1834,4 +1864,4 @@ process.on('SIGINT', async () => {
     }
 });
 
-run();
+startDaemon();

@@ -18,6 +18,10 @@ class AkunPangkalan extends Model
         'user_id',
     ];
 
+    protected $casts = [
+        'password' => 'encrypted', // Enkripsi Otomatis Laravel Level 2
+    ];
+
     protected static function booted()
     {
         static::creating(function ($model) {

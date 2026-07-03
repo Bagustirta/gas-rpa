@@ -197,22 +197,26 @@ class ApiLpgController extends Controller
 
         $userId = $transaksi->akunPangkalan->user_id ?? null;
         if ($userId) {
-            $now = Carbon::now();
-            $summary = [
-                'total' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->count(),
-                'sukses' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'sukses')->count(),
-                'belum_lapor' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'belum_lapor')->count(),
-                'gagal' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'gagal')->count(),
-            ];
-            event(new \App\Events\RpaProgressUpdated($userId, 'Transaksi ID ' . $transaksi->id . ' sukses dilaporkan', $transaksi->id, 'sukses', $summary));
+            $sync = \App\Models\RpaSync::where('user_id', $userId)->where('status', 'processing')->first();
+            if ($sync) {
+                $sync->increment('success_records');
+                $sync->refresh();
+                
+                $summary = $sync->calculateSummary();
+                try {
+                    event(new \App\Events\RpaProgressUpdated($userId, 'Transaksi ID ' . $transaksi->id . ' sukses dilaporkan', $transaksi->id, 'sukses', $summary));
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Broadcast error on konfirmasiLapor: ' . $e->getMessage());
+                }
+            }
         }
 
         return response()->json([
             'status'  => 'success',
-            'message' => "NIK {$transaksi->pelanggan->nik} berhasil dikonfirmasi dilaporkan ke Pertamina.",
+            'message' => "NIK " . ($transaksi->pelanggan?->nik ?? 'Tidak Diketahui') . " berhasil dikonfirmasi dilaporkan ke Pertamina.",
             'data'    => [
                 'id'               => $transaksi->id,
-                'nik'              => $transaksi->pelanggan->nik,
+                'nik'              => $transaksi->pelanggan?->nik,
                 'jumlah_tabung'    => $transaksi->jumlah_tabung,
                 'waktu_dilaporkan' => $transaksi->waktu_dilaporkan->toIso8601String(),
             ],
@@ -318,15 +322,35 @@ class ApiLpgController extends Controller
      */
     public function getPendingSync(): JsonResponse
     {
-        $sync = \App\Models\RpaSync::where('status', 'pending')->orderBy('created_at', 'asc')->first();
-        return response()->json([
-            'status' => 'success',
-            'sync'   => $sync ? [
-                'id'         => $sync->id,
-                'status'     => $sync->status,
-                'created_at' => $sync->created_at->toIso8601String(),
-            ] : null,
-        ]);
+        // Use transaction to prevent race conditions when multiple workers poll at the same time
+        return \Illuminate\Support\Facades\DB::transaction(function () {
+            $sync = \App\Models\RpaSync::where('status', 'pending')
+                ->lockForUpdate() // Lock row for update
+                ->orderBy('created_at', 'asc')
+                ->first();
+
+            if ($sync) {
+                $sync->update([
+                    'status' => 'processing',
+                    'started_at' => now()
+                ]);
+
+                return response()->json([
+                    'status' => 'success',
+                    'sync'   => [
+                        'id'         => $sync->id,
+                        'user_id'    => $sync->user_id,
+                        'status'     => $sync->status,
+                        'created_at' => $sync->created_at->toIso8601String(),
+                    ],
+                ]);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'sync'   => null,
+            ]);
+        });
     }
 
     /**
@@ -345,30 +369,33 @@ class ApiLpgController extends Controller
         }
 
         $data = $request->validate([
-            'status'        => ['required', 'string', 'in:processing,completed,failed'],
-            'total_records' => ['integer', 'min:0'],
-            'message'       => ['string', 'nullable'],
+            'status'            => ['sometimes', 'required', 'string', 'in:processing,completed,failed'],
+            'total_records'     => ['sometimes', 'integer', 'min:0'],
+            'message'           => ['sometimes', 'string', 'nullable'],
+            'current_pangkalan' => ['sometimes', 'string', 'nullable'],
         ]);
 
-        if ($data['status'] === 'processing' && !$sync->started_at) {
+        if (isset($data['status']) && $data['status'] === 'processing' && !$sync->started_at) {
             $sync->started_at = now();
         }
-        if (in_array($data['status'], ['completed', 'failed']) && !$sync->completed_at) {
+        if (isset($data['status']) && in_array($data['status'], ['completed', 'failed']) && !$sync->completed_at) {
+            $sync->started_at = now(); // Ensure started_at is also set if they skip processing
             $sync->completed_at = now();
         }
 
         $sync->update($data);
 
-        if (in_array($data['status'], ['completed', 'failed'])) {
-            $now = Carbon::now();
+        // If current_pangkalan is updated, we also want to broadcast an event so the UI updates instantly!
+        if (isset($data['current_pangkalan']) || isset($data['status'])) {
             $userId = $sync->user_id;
-            $summary = [
-                'total' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->count(),
-                'sukses' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'sukses')->count(),
-                'belum_lapor' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'belum_lapor')->count(),
-                'gagal' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'gagal')->count(),
-            ];
-            event(new \App\Events\RpaProgressUpdated($userId, 'Sync ' . $data['status'], null, $data['status'], $summary));
+            $summary = $sync->calculateSummary();
+            
+            $eventName = isset($data['status']) ? 'Sync ' . $data['status'] : 'Update Pangkalan';
+            try {
+                event(new \App\Events\RpaProgressUpdated($userId, $eventName, null, $data['status'] ?? 'processing', $summary));
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('Broadcast error on updateSyncStatus: ' . $e->getMessage());
+            }
         }
 
         return response()->json([
@@ -430,7 +457,7 @@ class ApiLpgController extends Controller
                     $selisih = 4 - $currentSum;
                     $transaksi->update([
                         'jumlah_tabung' => $transaksi->jumlah_tabung + $selisih,
-                        'status_lapor' => 'sukses',
+                        'status_lapor' => 'kuota_habis',
                         'dilaporkan_pertamina' => true,
                         'catatan_lapor' => 'Selesai: Kuota 4/4 Habis (Beli di pangkalan lain)',
                         'waktu_dilaporkan' => Carbon::now(),
@@ -448,19 +475,23 @@ class ApiLpgController extends Controller
 
         $userId = $transaksi->akunPangkalan->user_id ?? null;
         if ($userId) {
-            $now = Carbon::now();
-            $summary = [
-                'total' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->count(),
-                'sukses' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'sukses')->count(),
-                'belum_lapor' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'belum_lapor')->count(),
-                'gagal' => TransaksiGas::whereHas('akunPangkalan', function ($q) use ($userId) { $q->where('user_id', $userId); })->whereMonth('tanggal_transaksi', $now->month)->whereYear('tanggal_transaksi', $now->year)->where('status_lapor', 'gagal')->count(),
-            ];
-            event(new \App\Events\RpaProgressUpdated($userId, 'Transaksi ID ' . $transaksi->id . ' gagal dilaporkan', $transaksi->id, 'gagal', $summary));
+            $sync = \App\Models\RpaSync::where('user_id', $userId)->where('status', 'processing')->first();
+            if ($sync) {
+                $sync->increment('failed_records');
+                $sync->refresh();
+                
+                $summary = $sync->calculateSummary();
+                try {
+                    event(new \App\Events\RpaProgressUpdated($userId, 'Transaksi ID ' . $transaksi->id . ' gagal dilaporkan', $transaksi->id, 'gagal', $summary));
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Broadcast error on gagalLapor: ' . $e->getMessage());
+                }
+            }
         }
 
         return response()->json([
             'status'  => 'success',
-            'message' => "NIK {$transaksi->pelanggan->nik} ditandai gagal dilaporkan dengan alasan: {$data['message']}.",
+            'message' => "NIK " . ($transaksi->pelanggan?->nik ?? 'Tidak Diketahui') . " ditandai gagal dilaporkan dengan alasan: {$data['message']}.",
         ]);
     }
 
@@ -536,7 +567,8 @@ class ApiLpgController extends Controller
             'email_pangkalan' => ['nullable', 'string'],
         ]);
 
-        $pelanggan = \App\Models\Pelanggan::where('nik', $data['nik'])->first();
+        // Cari pelanggan dari database lokal (gunakan bindex karena NIK dienkripsi)
+        $pelanggan = \App\Models\Pelanggan::where('nik_bindex', hash_hmac('sha256', $data['nik'], config('app.key')))->first();
         if (!$pelanggan) {
             return response()->json([
                 'status' => 'error',
