@@ -22,6 +22,12 @@ class AkunPangkalanController extends Controller
 
     public function store(Request $request)
     {
+        if (\App\Models\AkunPangkalan::where('user_id', Auth::id())->count() >= 2) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'nama_pangkalan' => 'Batas maksimal 2 Pangkalan telah tercapai untuk akun Anda.',
+            ]);
+        }
+
         $validated = $request->validate([
             'nama_pangkalan' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'max:255'],

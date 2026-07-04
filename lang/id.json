@@ -1,0 +1,7 @@
+{
+    "validation.min.string": ":attribute minimal harus berisi :min karakter.",
+    "validation.required": ":attribute wajib diisi.",
+    "validation.email": ":attribute harus berupa alamat email yang valid.",
+    "validation.unique": ":attribute sudah digunakan.",
+    "validation.confirmed": "Konfirmasi :attribute tidak cocok."
+}

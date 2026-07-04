@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'api.key' => \App\Http\Middleware\ApiKeyMiddleware::class,
             'super_admin' => \App\Http\Middleware\IsSuperAdmin::class,
+            'subscribed' => \App\Http\Middleware\CheckSubscription::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

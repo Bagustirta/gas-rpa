@@ -29,7 +29,8 @@
                 <th class="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider">Nama Agen</th>
                 <th class="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider">Email / Login</th>
                 <th class="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Hak Akses</th>
-                <th class="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Status</th>
+                <th class="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Akun</th>
+                <th class="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Langganan</th>
                 <th class="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Jml Pangkalan</th>
                 <th class="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider">Terdaftar Sejak</th>
                 <th class="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Aksi</th>
@@ -66,6 +67,24 @@
                     :class="user.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'">
                     {{ user.is_active ? 'Aktif' : 'Nonaktif' }}
                   </span>
+                </td>
+                <td class="py-4 px-6 text-center">
+                  <div class="flex flex-col items-center">
+                    <span class="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider mb-1"
+                      :class="{
+                        'bg-emerald-100 text-emerald-700': user.role === 'super_admin' || user.subscription_status === 'aktif',
+                        'bg-indigo-100 text-indigo-700': user.role !== 'super_admin' && user.subscription_status === 'trial',
+                        'bg-red-100 text-red-700': user.role !== 'super_admin' && user.subscription_status === 'non-aktif'
+                      }">
+                      {{ user.role === 'super_admin' ? 'Aktif' : user.subscription_status }}
+                    </span>
+                    <span v-if="user.role === 'super_admin'" class="text-[10px] text-emerald-600 font-bold">
+                      Tanpa Batas
+                    </span>
+                    <span v-else-if="user.subscription_expired_at" class="text-[10px] text-slate-500 font-mono">
+                      s/d {{ formatDate(user.subscription_expired_at) }}
+                    </span>
+                  </div>
                 </td>
                 <td class="py-4 px-6 text-center">
                   <span class="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-bold"
@@ -169,6 +188,33 @@
                 </select>
                 <div v-if="form.errors.is_active" class="mt-1 text-xs text-red-500">{{ form.errors.is_active }}</div>
               </div>
+              
+              <div v-if="modalMode === 'edit' && form.role !== 'super_admin'" class="col-span-2 border-t border-slate-100 pt-4 mt-2">
+                <h4 class="text-sm font-bold text-slate-800 mb-4">Pengaturan Langganan</h4>
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-2">Status Langganan</label>
+                    <select
+                      v-model="form.subscription_status"
+                      class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 transition-all duration-200"
+                    >
+                      <option value="trial">Trial</option>
+                      <option value="aktif">Aktif (Premium)</option>
+                      <option value="non-aktif">Berakhir (Expired)</option>
+                    </select>
+                    <div v-if="form.errors.subscription_status" class="mt-1 text-xs text-red-500">{{ form.errors.subscription_status }}</div>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-2">Tgl Kedaluwarsa</label>
+                    <input
+                      v-model="form.subscription_expired_at"
+                      type="date"
+                      class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 transition-all duration-200"
+                    />
+                    <div v-if="form.errors.subscription_expired_at" class="mt-1 text-xs text-red-500">{{ form.errors.subscription_expired_at }}</div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div>
@@ -241,6 +287,8 @@ const form = useForm({
   password_confirmation: '',
   role: 'agen',
   is_active: true,
+  subscription_status: 'trial',
+  subscription_expired_at: '',
 });
 
 const openModal = (mode, user = null) => {
@@ -252,12 +300,22 @@ const openModal = (mode, user = null) => {
     form.email = user.email;
     form.role = user.role;
     form.is_active = user.is_active === 1 || user.is_active === true;
+    form.subscription_status = user.subscription_status || 'trial';
+    // Format date for date input (YYYY-MM-DD)
+    if (user.subscription_expired_at) {
+      const d = new Date(user.subscription_expired_at);
+      form.subscription_expired_at = d.toISOString().split('T')[0];
+    } else {
+      form.subscription_expired_at = '';
+    }
     form.password = '';
     form.password_confirmation = '';
   } else {
     form.reset();
     form.role = 'agen';
     form.is_active = true;
+    form.subscription_status = 'trial';
+    form.subscription_expired_at = '';
   }
   
   form.clearErrors();

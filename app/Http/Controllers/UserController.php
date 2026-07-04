@@ -47,6 +47,8 @@ class UserController extends Controller
             'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
             'role' => 'required|in:super_admin,agen',
             'is_active' => 'boolean',
+            'subscription_status' => 'required|in:trial,aktif,non-aktif',
+            'subscription_expired_at' => 'nullable|date',
         ];
 
         // Jika password diisi, maka update password juga
@@ -60,6 +62,9 @@ class UserController extends Controller
         $user->email = $validated['email'];
         $user->role = $validated['role'];
         $user->is_active = $request->has('is_active') ? $request->is_active : true;
+        
+        $user->subscription_status = $validated['subscription_status'];
+        $user->subscription_expired_at = $validated['subscription_expired_at'] ? \Carbon\Carbon::parse($validated['subscription_expired_at']) : null;
         
         if ($request->filled('password')) {
             $user->password = Hash::make($validated['password']);

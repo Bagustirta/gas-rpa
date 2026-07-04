@@ -63,11 +63,40 @@
           <div class="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold uppercase">
             {{ userInitials }}
           </div>
-          <div class="overflow-hidden">
-            <h4 class="font-bold text-sm text-slate-800 truncate">{{ $page.props.auth.user?.name }}</h4>
-            <p class="text-xs text-slate-500 truncate font-mono">{{ $page.props.auth.user?.email }}</p>
+          <div class="overflow-hidden w-full flex justify-between items-center pr-2">
+            <div>
+              <h4 class="font-bold text-sm text-slate-800 truncate">{{ $page.props.auth.user?.name }}</h4>
+              <p class="text-[10px] text-slate-500 truncate font-mono">{{ $page.props.auth.user?.email }}</p>
+            </div>
           </div>
         </div>
+
+        <!-- Subscription Status Box -->
+        <div v-if="$page.props.auth.user?.role !== 'super_admin'">
+          <div v-if="$page.props.auth.user?.subscription_status === 'trial'" class="mb-3 w-full bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2 flex items-center justify-between">
+            <span class="text-[10px] font-bold text-indigo-800 uppercase tracking-wider">Status: Trial</span>
+            <span class="text-[10px] font-bold bg-indigo-200 text-indigo-700 px-2 py-0.5 rounded-full">{{ subscriptionDaysRemaining }} Hari</span>
+          </div>
+          <div v-else-if="$page.props.auth.user?.subscription_status === 'non-aktif'" class="mb-3 w-full bg-red-50 border border-red-100 rounded-xl px-3 py-2 flex items-center justify-between">
+            <span class="text-[10px] font-bold text-red-800 uppercase tracking-wider">Status: Berakhir</span>
+            <span class="text-[10px] font-bold bg-red-200 text-red-700 px-2 py-0.5 rounded-full">Expired</span>
+          </div>
+          <div v-else-if="$page.props.auth.user?.subscription_status === 'aktif'" class="mb-3 w-full bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2 flex items-center justify-between">
+            <span class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Status: Premium</span>
+            <span class="text-[10px] font-bold bg-emerald-200 text-emerald-700 px-2 py-0.5 rounded-full">{{ subscriptionDaysRemaining }} Hari</span>
+          </div>
+          
+          <!-- Upgrade via Billing Page Button -->
+          <Link v-if="$page.props.auth.user?.subscription_status !== 'aktif'" 
+             :href="route('billing')" 
+             class="mb-3 w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold shadow-sm transition-all duration-200">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <span>Tingkatkan Akun</span>
+          </Link>
+        </div>
+
         <Link
           :href="route('logout')"
           method="post"
@@ -218,6 +247,15 @@ const userInitials = computed(() => {
 const currentDate = computed(() => {
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   return new Date().toLocaleDateString('id-ID', options);
+});
+
+const subscriptionDaysRemaining = computed(() => {
+  const expiredAt = page.props.auth.user?.subscription_expired_at;
+  if (!expiredAt) return 0;
+  
+  const diffTime = new Date(expiredAt) - new Date();
+  const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return days > 0 ? days : 0;
 });
 
 // Watch flash notifications

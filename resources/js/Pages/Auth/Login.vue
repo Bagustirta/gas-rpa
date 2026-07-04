@@ -84,6 +84,13 @@
             <span v-else>Masuk Sekarang</span>
           </button>
         </form>
+
+        <div class="mt-6 text-center text-sm text-slate-500">
+          Belum punya akun? 
+          <Link :href="route('register')" class="font-semibold text-indigo-600 hover:text-indigo-500 transition-colors">
+            Daftar Gratis (Trial 7 Hari)
+          </Link>
+        </div>
       </div>
 
       <!-- Footer Info -->
@@ -96,7 +103,7 @@
 </template>
 
 <script setup>
-import { useForm } from '@inertiajs/vue3';
+import { useForm, Link } from '@inertiajs/vue3';
 
 const form = useForm({
   email: '',

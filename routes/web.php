@@ -7,18 +7,41 @@ use App\Http\Controllers\PelangganController;
 use App\Http\Controllers\TransaksiGasController;
 use Illuminate\Support\Facades\Route;
 
+use App\Http\Controllers\RegisterController;
+use Illuminate\Foundation\Auth\EmailVerificationRequest;
+
 // Guest Routes
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login']);
+
+    Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
+    Route::post('/register', [RegisterController::class, 'register']);
 });
 
-// Authenticated Routes
+// Authenticated but unverified can see this
 Route::middleware('auth')->group(function () {
+    Route::get('/email/verify', function () {
+        return inertia('Auth/VerifyEmail');
+    })->name('verification.notice');
+
+    Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
+        $request->fulfill();
+        return redirect('/dashboard')->with('success', 'Email berhasil diverifikasi! Masa Trial 7 Hari Anda sudah aktif.');
+    })->middleware(['signed'])->name('verification.verify');
+
+    Route::post('/email/verification-notification', function (Illuminate\Http\Request $request) {
+        $request->user()->sendEmailVerificationNotification();
+        return back()->with('status', 'verification-link-sent');
+    })->middleware(['throttle:6,1'])->name('verification.send');
+
     // Logout
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+});
 
-    // Dashboard
+// Authenticated and Verified Routes
+Route::middleware(['auth', 'verified'])->group(function () {
+    // Dashboard & Billing
     Route::get('/', function () {
         if (auth()->check() && auth()->user()->isSuperAdmin()) {
             return redirect()->route('superadmin.dashboard');
@@ -26,17 +49,21 @@ Route::middleware('auth')->group(function () {
         return redirect()->route('dashboard');
     });
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    
+    Route::get('/langganan', function () {
+        return inertia('Billing/Index');
+    })->name('billing');
 
-    // Akun Pangkalan (CRUD)
-    Route::prefix('akun-pangkalan')->name('akun-pangkalan.')->group(function () {
+    // Akun Pangkalan (CRUD) - Butuh Langganan Aktif
+    Route::middleware('subscribed')->prefix('akun-pangkalan')->name('akun-pangkalan.')->group(function () {
         Route::get('/', [AkunPangkalanController::class, 'index'])->name('index');
         Route::post('/', [AkunPangkalanController::class, 'store'])->name('store');
         Route::put('/{akunPangkalan}', [AkunPangkalanController::class, 'update'])->name('update');
         Route::delete('/{akunPangkalan}', [AkunPangkalanController::class, 'destroy'])->name('destroy');
     });
 
-    // Pelanggan (CRUD & Import)
-    Route::prefix('pelanggan')->name('pelanggan.')->group(function () {
+    // Pelanggan (CRUD & Import) - Butuh Langganan Aktif
+    Route::middleware('subscribed')->prefix('pelanggan')->name('pelanggan.')->group(function () {
         Route::get('/', [PelangganController::class, 'index'])->name('index');
         Route::post('/', [PelangganController::class, 'store'])->name('store');
         Route::put('/{pelanggan}', [PelangganController::class, 'update'])->name('update');
@@ -45,8 +72,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/import', [PelangganController::class, 'import'])->name('import');
     });
 
-    // Transaksi Gas (CRUD & Actions)
-    Route::prefix('transaksi-gas')->name('transaksi-gas.')->group(function () {
+    // Transaksi Gas (CRUD & Actions) - Butuh Langganan Aktif
+    Route::middleware('subscribed')->prefix('transaksi-gas')->name('transaksi-gas.')->group(function () {
         Route::get('/', [TransaksiGasController::class, 'index'])->name('index');
         Route::get('/search-nik', [TransaksiGasController::class, 'searchNik'])->name('search-nik');
         Route::post('/', [TransaksiGasController::class, 'store'])->name('store');
