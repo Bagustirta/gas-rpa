@@ -386,7 +386,17 @@ class TransaksiGasController extends Controller
         // Gunakan VBScript + WScript.Shell agar CMD window terbuka meski PHP berjalan sebagai service
         if (str_contains(PHP_OS_FAMILY, 'Windows')) {
             $botPath = str_replace('/', '\\', base_path('rpa-bot'));
-            $cmd = "node check-quota.js --user-id {$userId}";
+            
+            // Persiapkan direktori khusus untuk log audit
+            $logDir = storage_path('logs/rpa-audit');
+            if (!file_exists($logDir)) {
+                mkdir($logDir, 0755, true);
+            }
+            $logFile = str_replace('/', '\\', $logDir . '/audit_log_user_' . $userId . '.txt');
+            
+            // Perintah eksekusi Node.js beserta pengalihan log (menimpa log lama tiap kali run)
+            $cmd = "node check-quota.js --user-id {$userId} > \"{$logFile}\" 2>&1";
+            
             $vbs = sys_get_temp_dir() . '\\audit_run_' . $userId . '_' . time() . '.vbs';
             // VBScript: gunakan ""  (dua kutip) untuk escape quote di dalam string
             $vbsContent = "Set oShell = CreateObject(\"WScript.Shell\")\r\n";
