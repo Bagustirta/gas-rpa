@@ -376,96 +376,120 @@ async function doApplyDateFilter(page) {
             await safeClick(page, '#rpa-date-picker-trigger');
             await sleep(1500);
 
-            // Klik tanggal 1 secara native/safe
-            const day1Found = await page.evaluate(() => {
-                const candidates = Array.from(document.querySelectorAll('div, td, span, button, p'));
+            // Coba klik tombol "Bulan Ini" (This Month) jika ada di preset daterangepicker
+            const presetFound = await page.evaluate(() => {
+                const candidates = Array.from(document.querySelectorAll('li, button, div, span'));
                 for (const el of candidates) {
-                    if (el.children.length === 0 && el.textContent.trim() === '1') {
-                        const className = (el.className || '').toLowerCase();
-                        if (className.includes('disabled') || className.includes('muted') || className.includes('old') || className.includes('new') || className.includes('outside') || className.includes('next-month') || className.includes('prev-month')) {
-                            continue;
-                        }
-
-                        let target = el;
-                        let curr = el;
-                        while (curr && curr.tagName !== 'BODY') {
-                            const tag = curr.tagName.toUpperCase();
-                            const cls = (curr.className || '').toLowerCase();
-                            if (tag === 'TD' || tag === 'BUTTON' || cls.includes('cell') || cls.includes('day') || cls.includes('date')) {
-                                target = curr;
-                                break;
+                    if (el.children.length === 0) {
+                        const txt = el.textContent.trim().toLowerCase();
+                        if (txt === 'bulan ini' || txt === 'this month') {
+                            const style = window.getComputedStyle(el);
+                            if (style.display !== 'none' && style.visibility !== 'hidden') {
+                                el.setAttribute('id', 'rpa-preset-bulan-ini');
+                                return true;
                             }
-                            curr = curr.parentElement;
-                        }
-
-                        const targetCls = (target.className || '').toLowerCase();
-                        if (targetCls.includes('disabled') || targetCls.includes('muted') || targetCls.includes('outside') || targetCls.includes('prev-month') || targetCls.includes('next-month')) {
-                            continue;
-                        }
-
-                        const style = window.getComputedStyle(target);
-                        if (style.display !== 'none' && style.visibility !== 'hidden') {
-                            target.setAttribute('id', 'rpa-day-1');
-                            return true;
                         }
                     }
                 }
                 return false;
             });
 
-            if (day1Found) {
-                console.log('✓ Menemukan Tanggal 1 di kalender. Mengklik...');
-                await safeClick(page, '#rpa-day-1');
-                await sleep(1200);
-            } else {
-                console.log('! Gagal menemukan Tanggal 1 di kalender.');
-            }
-
-            // Klik tanggal hari ini secara native/safe
-            const todayDayStr = String(new Date().getDate());
-            const todayFound = await page.evaluate((todayStr) => {
-                const candidates = Array.from(document.querySelectorAll('div, td, span, button, p'));
-                for (const el of candidates) {
-                    if (el.children.length === 0 && el.textContent.trim() === todayStr) {
-                        const className = (el.className || '').toLowerCase();
-                        if (className.includes('disabled') || className.includes('muted') || className.includes('old') || className.includes('new') || className.includes('outside') || className.includes('next-month') || className.includes('prev-month')) {
-                            continue;
-                        }
-
-                        let target = el;
-                        let curr = el;
-                        while (curr && curr.tagName !== 'BODY') {
-                            const tag = curr.tagName.toUpperCase();
-                            const cls = (curr.className || '').toLowerCase();
-                            if (tag === 'TD' || tag === 'BUTTON' || cls.includes('cell') || cls.includes('day') || cls.includes('date')) {
-                                target = curr;
-                                break;
-                            }
-                            curr = curr.parentElement;
-                        }
-
-                        const targetCls = (target.className || '').toLowerCase();
-                        if (targetCls.includes('disabled') || targetCls.includes('muted') || targetCls.includes('outside') || targetCls.includes('prev-month') || targetCls.includes('next-month')) {
-                            continue;
-                        }
-
-                        const style = window.getComputedStyle(target);
-                        if (style.display !== 'none' && style.visibility !== 'hidden') {
-                            target.setAttribute('id', 'rpa-day-today');
-                            return true;
-                        }
-                    }
-                }
-                return false;
-            }, todayDayStr);
-
-            if (todayFound) {
-                console.log(`✓ Menemukan Tanggal Hari Ini (${todayDayStr}) di kalender. Mengklik...`);
-                await safeClick(page, '#rpa-day-today');
+            if (presetFound) {
+                console.log('✓ Menemukan preset "Bulan Ini". Mengklik...');
+                await safeClick(page, '#rpa-preset-bulan-ini');
                 await sleep(1000);
             } else {
-                console.log(`! Gagal menemukan Tanggal Hari Ini (${todayDayStr}) di kalender.`);
-            }
+                // Klik tanggal 1 secara native/safe (Mencari dari kanan/bawah DOM agar tidak salah klik bulan lalu di dual-calendar)
+                const day1Found = await page.evaluate(() => {
+                    const candidates = Array.from(document.querySelectorAll('div, td, span, button, p')).reverse();
+                    for (const el of candidates) {
+                        if (el.children.length === 0 && el.textContent.trim() === '1') {
+                            const className = (el.className || '').toLowerCase();
+                            if (className.includes('disabled') || className.includes('muted') || className.includes('old') || className.includes('new') || className.includes('outside') || className.includes('next-month') || className.includes('prev-month')) {
+                                continue;
+                            }
+
+                            let target = el;
+                            let curr = el;
+                            while (curr && curr.tagName !== 'BODY') {
+                                const tag = curr.tagName.toUpperCase();
+                                const cls = (curr.className || '').toLowerCase();
+                                if (tag === 'TD' || tag === 'BUTTON' || cls.includes('cell') || cls.includes('day') || cls.includes('date')) {
+                                    target = curr;
+                                    break;
+                                }
+                                curr = curr.parentElement;
+                            }
+
+                            const targetCls = (target.className || '').toLowerCase();
+                            if (targetCls.includes('disabled') || targetCls.includes('muted') || targetCls.includes('outside') || targetCls.includes('prev-month') || targetCls.includes('next-month')) {
+                                continue;
+                            }
+
+                            const style = window.getComputedStyle(target);
+                            if (style.display !== 'none' && style.visibility !== 'hidden') {
+                                target.setAttribute('id', 'rpa-day-1');
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                });
+
+                if (day1Found) {
+                    console.log('✓ Menemukan Tanggal 1 di kalender (Current Month). Mengklik...');
+                    await safeClick(page, '#rpa-day-1');
+                    await sleep(1200);
+                } else {
+                    console.log('! Gagal menemukan Tanggal 1 di kalender.');
+                }
+
+                // Klik tanggal hari ini secara native/safe
+                const todayDayStr = String(new Date().getDate());
+                const todayFound = await page.evaluate((todayStr) => {
+                    const candidates = Array.from(document.querySelectorAll('div, td, span, button, p')).reverse();
+                    for (const el of candidates) {
+                        if (el.children.length === 0 && el.textContent.trim() === todayStr) {
+                            const className = (el.className || '').toLowerCase();
+                            if (className.includes('disabled') || className.includes('muted') || className.includes('old') || className.includes('new') || className.includes('outside') || className.includes('next-month') || className.includes('prev-month')) {
+                                continue;
+                            }
+
+                            let target = el;
+                            let curr = el;
+                            while (curr && curr.tagName !== 'BODY') {
+                                const tag = curr.tagName.toUpperCase();
+                                const cls = (curr.className || '').toLowerCase();
+                                if (tag === 'TD' || tag === 'BUTTON' || cls.includes('cell') || cls.includes('day') || cls.includes('date')) {
+                                    target = curr;
+                                    break;
+                                }
+                                curr = curr.parentElement;
+                            }
+
+                            const targetCls = (target.className || '').toLowerCase();
+                            if (targetCls.includes('disabled') || targetCls.includes('muted') || targetCls.includes('outside') || targetCls.includes('prev-month') || targetCls.includes('next-month')) {
+                                continue;
+                            }
+
+                            const style = window.getComputedStyle(target);
+                            if (style.display !== 'none' && style.visibility !== 'hidden') {
+                                target.setAttribute('id', 'rpa-day-today');
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                }, todayDayStr);
+
+                if (todayFound) {
+                    console.log(`✓ Menemukan Tanggal Hari Ini (${todayDayStr}) di kalender. Mengklik...`);
+                    await safeClick(page, '#rpa-day-today');
+                    await sleep(1000);
+                } else {
+                    console.log(`! Gagal menemukan Tanggal Hari Ini (${todayDayStr}) di kalender.`);
+                }
+            } // TUTUP ELSE DARI presetFound
 
             // Klik apply jika ada
             const applyFound = await page.evaluate(() => {
