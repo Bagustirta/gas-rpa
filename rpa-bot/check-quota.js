@@ -605,9 +605,9 @@ async function run() {
 
         console.log('\nMembuka browser...');
         const browser = await puppeteer.launch({
-            headless: false,
+            headless: true, // Jalan gaib di background
             defaultViewport: null,
-            args: ['--start-maximized'],
+            args: ['--start-maximized', '--no-sandbox', '--disable-setuid-sandbox'],
             userDataDir: './user_data'
         });
 

@@ -97,11 +97,50 @@ class TransaksiGasController extends Controller
                 ];
             });
 
+        $auditProgress = \App\Models\AuditProgress::where('user_id', $userId)->first();
+        $auditProgressData = null;
+        $activeAudit = false;
+
+        if ($auditProgress) {
+            $isRunning = (bool) $auditProgress->is_running;
+
+            if ($isRunning && $auditProgress->updated_at && $auditProgress->updated_at->diffInSeconds(now()) > 30) {
+                $auditProgress->update([
+                    'is_running'  => false,
+                    'finished_at' => now(),
+                    'step'        => 'error',
+                    'step_label'  => 'Audit terhenti (Terminal ditutup)',
+                ]);
+                $isRunning = false;
+            }
+
+            $finishedAt = $auditProgress->finished_at ? \Carbon\Carbon::parse($auditProgress->finished_at) : null;
+            $isOld = $finishedAt && $finishedAt->diffInMinutes(now()) >= 10;
+            
+            $activeAudit = $isRunning;
+
+            if ($isRunning || !$isOld) {
+                $auditProgressData = [
+                    'step'            => $auditProgress->step,
+                    'step_label'      => $auditProgress->step_label,
+                    'pangkalan_name'  => $auditProgress->pangkalan_name,
+                    'pangkalan_index' => (int) $auditProgress->pangkalan_index,
+                    'pangkalan_total' => (int) $auditProgress->pangkalan_total,
+                    'nik_current'     => $auditProgress->nik_current,
+                    'nik_total'       => (int) $auditProgress->nik_total,
+                    'is_running'      => $isRunning,
+                    'finished_at'     => $auditProgress->finished_at,
+                ];
+            }
+        }
+
         return Inertia::render('TransaksiGas/Index', [
             'transaksis' => $transaksis,
             'pangkalans' => $pangkalans,
             'filters' => $request->only(['search', 'status_lapor', 'akun_pangkalan_id', 'tanggal']),
             'activeSync' => $activeSync,
+            'activeAudit' => $activeAudit,
+            'auditProgress' => $auditProgressData,
             'rpaSummary' => $rpaSummary,
             'syncHistory' => $syncHistory,
         ]);
@@ -337,6 +376,12 @@ class TransaksiGasController extends Controller
     {
         $userId = Auth::id();
 
+        // Cegah eksekusi ganda jika audit sedang berjalan
+        $activeAudit = \App\Models\AuditProgress::where('user_id', $userId)->where('is_running', true)->first();
+        if ($activeAudit && $activeAudit->updated_at && $activeAudit->updated_at->diffInSeconds(now()) < 60) {
+            return redirect()->route('transaksi-gas.index')->with('error', 'Bot Audit Kuota sedang berjalan. Mohon tunggu hingga proses selesai.');
+        }
+
         // Panggil Bot Audit secara otomatis di Windows
         // Gunakan VBScript + WScript.Shell agar CMD window terbuka meski PHP berjalan sebagai service
         if (str_contains(PHP_OS_FAMILY, 'Windows')) {
@@ -345,17 +390,19 @@ class TransaksiGasController extends Controller
             $vbs = sys_get_temp_dir() . '\\audit_run_' . $userId . '_' . time() . '.vbs';
             // VBScript: gunakan ""  (dua kutip) untuk escape quote di dalam string
             $vbsContent = "Set oShell = CreateObject(\"WScript.Shell\")\r\n";
-            $vbsContent .= "oShell.Run \"cmd.exe /k cd /d \"\"" . $botPath . "\"\" && " . $cmd . "\", 1, False\r\n";
+            $vbsContent .= "oShell.Run \"cmd.exe /c cd /d \"\"" . $botPath . "\"\" && " . $cmd . "\", 0, False\r\n";
             file_put_contents($vbs, $vbsContent);
             pclose(popen("wscript.exe \"{$vbs}\"", "r"));
         }
 
-        return redirect()->route('transaksi-gas.index')->with('success', 'Bot Audit Kuota sedang dijalankan. Terminal akan terbuka di komputer Anda.');
+        return redirect()->route('transaksi-gas.index')->with('success', 'Bot Audit Kuota sedang dijalankan secara gaib di latar belakang. Silakan pantau widget progress!');
     }
 
     public function resetSync()
     {
         $userId = Auth::id();
+        
+        // Reset RpaSync Utama
         \App\Models\RpaSync::where('user_id', $userId)->whereIn('status', ['pending', 'processing'])
             ->update([
                 'status' => 'failed',
@@ -363,7 +410,21 @@ class TransaksiGasController extends Controller
                 'completed_at' => now(),
             ]);
 
-        return redirect()->route('transaksi-gas.index')->with('success', 'Status sinkronisasi berhasil direset.');
+        // Reset AuditProgress
+        \App\Models\AuditProgress::where('user_id', $userId)->where('is_running', true)
+            ->update([
+                'is_running'  => false,
+                'finished_at' => now(),
+                'step'        => 'error',
+                'step_label'  => 'Dibatalkan secara paksa (Reset)',
+            ]);
+
+        // Bunuh paksa proses Node.js Audit Kuota khusus user ini (Windows)
+        if (str_contains(PHP_OS_FAMILY, 'Windows')) {
+            pclose(popen("wmic process where \"name='node.exe' and commandline like '%check-quota.js --user-id {$userId}%'\" call terminate > NUL 2>&1", "r"));
+        }
+
+        return redirect()->route('transaksi-gas.index')->with('success', 'Seluruh bot latar belakang berhasil dihentikan paksa (Reset).');
     }
 
     public function distribusiOtomatis(Request $request)

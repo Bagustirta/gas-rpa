@@ -7,62 +7,62 @@
           <h2 class="text-xl font-bold text-slate-900">Transaksi Gas LPG 3Kg</h2>
           <p class="text-xs text-slate-500">Catatan transaksi penjualan tabung gas melon bersubsidi</p>
         </div>
-        <div class="flex items-center flex-wrap gap-2.5">
-          <!-- Reset Sync Button (Visible only when activeSync is true) -->
+        <div class="grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap sm:gap-2.5 w-full sm:w-auto mt-4 sm:mt-0">
+          <!-- Reset Semua Bot (Visible only when activeSync atau activeAudit is true) -->
           <button
-            v-if="page.props.activeSync"
+            v-if="page.props.activeSync || page.props.activeAudit"
             @click="resetSync"
-            class="inline-flex items-center justify-center space-x-2 px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 font-semibold text-xs text-white shadow-md shadow-rose-100 transition-all duration-200 active:scale-[0.98]"
-            title="Reset antrean sinkronisasi yang macet"
+            class="col-span-2 sm:col-span-1 w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-3 py-2.5 sm:py-2 rounded-xl bg-rose-600 hover:bg-rose-500 font-semibold text-xs text-white shadow-md shadow-rose-100 transition-all duration-200 active:scale-[0.98]"
+            :title="page.props.activeAudit && !page.props.activeSync ? 'Hentikan pengecekan kuota' : 'Batalkan pelaporan'"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>Reset Sync</span>
+            <span>{{ page.props.activeAudit && !page.props.activeSync ? 'Batalkan Cek' : (page.props.activeSync && !page.props.activeAudit ? 'Batalkan Lapor' : 'Batalkan Bot') }}</span>
           </button>
 
           <!-- Audit Quota Button -->
           <button
             @click="auditQuota"
-            class="inline-flex items-center justify-center space-x-2 px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 font-semibold text-xs text-white shadow-md shadow-sky-100 transition-all duration-200 active:scale-[0.98]"
-            title="Cek Kuota Pertamina (Audit)"
+            class="w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-3 py-2.5 sm:py-2 rounded-xl bg-sky-600 hover:bg-sky-500 font-semibold text-xs text-white shadow-md shadow-sky-100 transition-all duration-200 active:scale-[0.98]"
+            title="Mengecek sisa jatah kuota tiap pelanggan"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
-            <span>Audit Kuota</span>
+            <span>Cek Kuota</span>
           </button>
 
           <!-- Mulai Sync Pertamina (RPA) -->
           <button
             @click="triggerRpa"
-            class="inline-flex items-center justify-center space-x-2 px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 font-semibold text-xs text-white shadow-md shadow-amber-100 transition-all duration-200 active:scale-[0.98]"
+            class="w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-3 py-2.5 sm:py-2 rounded-xl bg-amber-600 hover:bg-amber-500 font-semibold text-xs text-white shadow-md shadow-amber-100 transition-all duration-200 active:scale-[0.98]"
             :class="{ 'opacity-50 cursor-not-allowed': page.props.activeSync }"
             :disabled="page.props.activeSync"
-            title="Mulai Sync Pertamina (RPA)"
+            title="Mengirim data transaksi ke MyPertamina"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 11H19.21" />
             </svg>
-            <span>Sync (RPA)</span>
+            <span>Lapor Pertamina</span>
           </button>
 
           <!-- Riwayat RPA Button -->
           <button
             @click="showHistoryModal = true"
-            class="inline-flex items-center justify-center space-x-2 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-semibold text-xs text-slate-700 transition-all duration-200 active:scale-[0.98]"
-            title="Riwayat Sinkronisasi RPA"
+            class="col-span-2 sm:col-span-1 w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-3 py-2.5 sm:py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-semibold text-xs text-slate-700 transition-all duration-200 active:scale-[0.98]"
+            title="Lihat riwayat pelaporan sebelumnya"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>Riwayat RPA</span>
+            <span>Riwayat Laporan</span>
           </button>
 
           <!-- Distribusi Otomatis -->
           <button
             @click="openDistModal"
-            class="inline-flex items-center justify-center space-x-2 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold text-xs text-white shadow-md shadow-emerald-100 transition-all duration-200 active:scale-[0.98]"
+            class="col-span-2 sm:col-span-1 w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-3 py-2.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold text-xs text-white shadow-md shadow-emerald-100 transition-all duration-200 active:scale-[0.98]"
             title="Distribusi tabung otomatis"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -75,7 +75,7 @@
           <button
             v-if="selectedIds.length > 0"
             @click="bulkMarkAsReported"
-            class="inline-flex items-center justify-center space-x-2 px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs transition-all duration-200 active:scale-[0.98]"
+            class="col-span-2 sm:col-span-1 w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-3 py-2.5 sm:py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs transition-all duration-200 active:scale-[0.98]"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
@@ -94,7 +94,7 @@
         
         <div class="relative z-10 w-full md:w-auto text-center md:text-left flex-shrink-0">
            <h3 class="font-bold text-lg text-white mb-0.5">
-             Progres RPA Pertamina
+             Progres Lapor Pertamina
              <span v-if="rpaSlides.length > 1" class="ml-2 px-2 py-0.5 rounded-full bg-white/20 text-xs font-bold">{{ activeSlide === 0 ? 'Global' : rpaSlides[activeSlide].nama_pangkalan }}</span>
            </h3>
            <p v-if="rpaSummary.current_pangkalan && activeSlide === 0" class="text-indigo-200 text-xs font-medium">
@@ -104,7 +104,7 @@
               Rincian pangkalan khusus
            </p>
            <p v-else class="text-indigo-200 text-xs font-medium">
-              Mempersiapkan Bot RPA...
+              Mempersiapkan Pelaporan Otomatis...
            </p>
         </div>
         
@@ -175,6 +175,9 @@
            </div>
         </div>
       </div>
+
+      <!-- Live Monitoring RPA Sync -->
+      <LiveMonitoringWidget v-if="page.props.auditProgress" :initialData="page.props.auditProgress" class="mt-4" />
 
       <!-- Filters & Search Bar -->
       <div class="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-center shadow-sm">
@@ -625,6 +628,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue';
 import { usePage, useForm, router, Link } from '@inertiajs/vue3';
 import AppLayout from '../../Layouts/AppLayout.vue';
+import LiveMonitoringWidget from '../../Components/LiveMonitoringWidget.vue';
 
 const page = usePage();
 const authUserId = computed(() => page.props.auth.user.id);
@@ -856,7 +860,7 @@ const auditQuota = () => {
   rpaConfirmType.value = 'audit';
   rpaConfirmData.value = {
     title: 'Mulai Audit Kuota Pelanggan?',
-    message: 'Ini akan otomatis membuka terminal di PC Anda dan menjalankan bot untuk audit/pencocokan kuota pelanggan bulan berjalan ke portal Pertamina.',
+    message: 'Ini akan menjalankan bot secara gaib di latar belakang untuk melakukan audit/pencocokan kuota pelanggan bulan berjalan ke portal Pertamina. Silakan pantau widget live progress di dashboard.',
     buttonLabel: 'Ya, Jalankan Audit',
   };
   showRpaConfirmModal.value = true;
