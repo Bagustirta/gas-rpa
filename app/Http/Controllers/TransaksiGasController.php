@@ -78,12 +78,32 @@ class TransaksiGasController extends Controller
             $rpaSummary = $activeSyncModel->calculateSummary();
         }
 
+        $syncHistory = \App\Models\RpaSync::where('user_id', $userId)
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(function ($sync) {
+                $summary = $sync->calculateSummary();
+                return [
+                    'id' => $sync->id,
+                    'status' => $sync->status,
+                    'message' => $sync->message,
+                    'total_records' => $summary['total'],
+                    'success_records' => $summary['sukses'],
+                    'failed_records' => $summary['gagal'],
+                    'limit_records' => $summary['kuota_habis'],
+                    'created_at' => $sync->created_at->format('d M Y, H:i'),
+                    'completed_at' => $sync->completed_at ? $sync->completed_at->format('d M Y, H:i') : null,
+                ];
+            });
+
         return Inertia::render('TransaksiGas/Index', [
             'transaksis' => $transaksis,
             'pangkalans' => $pangkalans,
             'filters' => $request->only(['search', 'status_lapor', 'akun_pangkalan_id', 'tanggal']),
             'activeSync' => $activeSync,
             'rpaSummary' => $rpaSummary,
+            'syncHistory' => $syncHistory,
         ]);
     }
 

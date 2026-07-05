@@ -36,6 +36,7 @@ Route::middleware('api.key')->group(function () {
 
     // Manajemen Sinkronisasi Manual RPA Bot
     Route::get('/rpa-sync/pending', [ApiLpgController::class, 'getPendingSync']);
+    Route::get('/rpa-sync/{id}', [ApiLpgController::class, 'getSyncStatus']);
     Route::patch('/rpa-sync/{id}', [ApiLpgController::class, 'updateSyncStatus']);
     Route::post('/rpa-sync/stok-kosong', [ApiLpgController::class, 'handleStokKosong']);
 

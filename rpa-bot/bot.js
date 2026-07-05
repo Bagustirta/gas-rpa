@@ -993,6 +993,7 @@ async function run() {
         let failCount = 0;
         let completedSuccessfully = false;
         let anyPangkalanProcessed = false;
+        let pangkalanRetries = {}; // Untuk melacak jumlah retry per pangkalan
 
         // Loop untuk login berantai ke masing-masing pangkalan
         for (let pIdx = 0; pIdx < pangkalanList.length; pIdx++) {
@@ -1041,6 +1042,47 @@ async function run() {
             const [page] = await browser.pages();
             console.log(`Membuka portal Pertamina: ${PERTAMINA_URL}`);
             await page.goto(PERTAMINA_URL, { waitUntil: 'domcontentloaded' });
+            await sleep(2000);
+
+            // Cek apakah halaman sedang maintenance
+            const isMaintenance = await page.evaluate(() => {
+                const text = document.body.textContent.toLowerCase();
+                return text.includes('peningkatan layanan') || text.includes('maintenance') || text.includes('under construction');
+            });
+
+            if (isMaintenance) {
+                pangkalanRetries[pangkalan.id] = (pangkalanRetries[pangkalan.id] || 0) + 1;
+                console.log('🔴 Sistem MyPertamina sedang MAINTENANCE (Peningkatan Layanan).');
+                
+                if (pangkalanRetries[pangkalan.id] <= 10) {
+                    console.log(`🔄 Halaman Maintenance/Overload. Tunggu 10 detik lalu refresh otomatis (Percobaan ke-${pangkalanRetries[pangkalan.id]})...`);
+                    
+                    // Update info ke frontend agar user tidak bingung
+                    await api.patch(`/api/rpa-sync/${syncId}`, { 
+                        current_pangkalan: `${pangkalan.nama_pangkalan} (Memantau Server Maintenance ${pangkalanRetries[pangkalan.id]}/10)` 
+                    }).catch(() => {});
+
+                    await sleep(10000); // Kasih jeda napas 10 detik buat servernya
+                    await browser.close();
+                    activeBrowser = null;
+                    pIdx--; // Mundur 1 langkah agar login pangkalan ini diulang
+                    continue;
+                } else {
+                    console.log(`❌ Menyerah karena web Pertamina terus-menerus maintenance setelah 10 kali percobaan.`);
+                    // Tandai transaksi sebagai gagal di database
+                    for (const trx of transactions) {
+                        try {
+                            await api.post(`/api/gagal-lapor/${trx.id}`, {
+                                message: `Gagal: Sistem MyPertamina sedang Maintenance (Peningkatan Layanan) / Overload.`
+                            });
+                            failCount++;
+                        } catch (e) {}
+                    }
+                    await browser.close();
+                    activeBrowser = null;
+                    continue;
+                }
+            }
 
             // Auto-fill login credentials if provided
             if (pangkalan.email && pangkalan.password) {
@@ -1138,7 +1180,9 @@ async function run() {
             console.log('Menunggu Anda berhasil login di browser...');
             let isLoggedIn = false;
             let loginSolverTries = 0;
-            while (!isLoggedIn) {
+            let loginWaitSeconds = 0;
+            
+            while (!isLoggedIn && loginWaitSeconds < 60) {
                 try {
                     const currentUrl = page.url();
                     if (currentUrl.includes('/merchant/app') || currentUrl.includes('/merchant/dashboard') || currentUrl.includes('/penjualan')) {
@@ -1168,6 +1212,30 @@ async function run() {
                     }
 
                     await sleep(1000);
+                    loginWaitSeconds++;
+                }
+            }
+
+            if (!isLoggedIn) {
+                const finalUrl = page.url();
+                console.log(`🔴 Gagal login setelah 60 detik. Posisi URL terakhir: ${finalUrl}`);
+                
+                // Coba ambil pesan error merah di halaman
+                const errorMsg = await page.evaluate(() => {
+                    const errors = Array.from(document.querySelectorAll('.text-red-500, .text-danger, .error, [role="alert"]'));
+                    for (const el of errors) {
+                        if (el.textContent.trim().length > 0) return el.textContent.trim();
+                    }
+                    return null;
+                });
+                
+                if (errorMsg) {
+                    console.log(`[!] Kemungkinan penyebab gagal: "${errorMsg}"`);
+                    throw new Error(`Gagal Login: ${errorMsg}`);
+                } else if (finalUrl.includes('500') || finalUrl.includes('errors=')) {
+                    throw new Error('Gagal Login: Server Pertamina Error 500 / Koneksi Terputus.');
+                } else {
+                    throw new Error('Gagal Login: Halaman Pertamina tidak merespons (Timeout 60s).');
                 }
             }
 
@@ -1195,6 +1263,9 @@ async function run() {
                 merchantName = pangkalan.nama_pangkalan;
             }
             console.log(`Nama Pangkalan Terdeteksi: "${merchantName}"`);
+
+            // Tunggu sebentar agar dashboard React merender data stok dengan sempurna
+            await sleep(3000);
 
             // Cek apakah stok di dashboard 0 tabung
             let isStokHabis = false;
@@ -1246,7 +1317,7 @@ async function run() {
             console.log('Menunggu Halaman Pencatatan Transaksi siap (mencari kolom NIK)...');
             let isInputPageReady = false;
             let waitingAttempts = 0;
-            while (!isInputPageReady) {
+            while (!isInputPageReady && waitingAttempts < 10) {
                 try {
                     isInputPageReady = await page.evaluate(() => {
                         const inputs = Array.from(document.querySelectorAll('input'));
@@ -1276,14 +1347,53 @@ async function run() {
                 }
             }
 
+            if (!isInputPageReady) {
+                pangkalanRetries[pangkalan.id] = (pangkalanRetries[pangkalan.id] || 0) + 1;
+                console.log(`🔴 Gagal menemukan form NIK setelah 10 detik (Halaman mungkin Blank/Putih atau nge-Lag).`);
+                
+                if (pangkalanRetries[pangkalan.id] <= 2) {
+                    console.log(`🔄 Melakukan restart browser untuk pangkalan ini (Percobaan ke-${pangkalanRetries[pangkalan.id]})...`);
+                    await browser.close();
+                    activeBrowser = null;
+                    pIdx--; // Mundurkan index agar pangkalan ini diulang
+                    continue;
+                } else {
+                    console.log(`❌ Gagal memuat halaman pangkalan setelah 2 kali percobaan. Melewati pangkalan ini...`);
+                    // Tandai transaksi sebagai gagal di database
+                    for (const trx of transactions) {
+                        try {
+                            await api.post(`/api/gagal-lapor/${trx.id}`, {
+                                message: `Gagal: Halaman MyPertamina Blank Putih / Tidak memuat form penjualan setelah beberapa kali percobaan.`
+                            });
+                            failCount++;
+                        } catch (e) {}
+                    }
+                    await browser.close();
+                    activeBrowser = null;
+                    continue;
+                }
+            }
+
             console.log('✓ Halaman pencatatan transaksi siap. Memulai input NIK...');
             await sleep(1000);
 
             let pangkalanStokHabis = false;
 
             // 6. Jalankan perulangan input transaksi
+            let isAbortedByUser = false;
             for (let i = 0; i < transactions.length; i++) {
                 const trx = transactions[i];
+
+                // Cek apakah user menekan tombol "Reset RPA" di tengah jalan
+                try {
+                    const statusRes = await api.get(`/api/rpa-sync/${syncId}`);
+                    if (statusRes.data && statusRes.data.sync && statusRes.data.sync.status === 'failed') {
+                        console.log('🛑 [TUGAS DIBATALKAN] Anda menekan "Reset RPA". Bot otomatis dihentikan (Hard Reset)...');
+                        isAbortedByUser = true;
+                        break;
+                    }
+                } catch (e) {}
+
                 console.log(`\n[${i + 1}/${transactions.length}] Memproses NIK: ${trx.nik} (${trx.jumlah_tabung} tabung)`);
 
                 try {
@@ -1784,6 +1894,13 @@ async function run() {
                 }
             }
 
+            if (isAbortedByUser) {
+                console.log('Menutup browser pangkalan ini (Dihentikan Manual)...');
+                await browser.close();
+                activeBrowser = null;
+                break; // Hentikan loop pangkalan, keluar dari job ini
+            }
+
             // Tutup browser pangkalan saat ini
             console.log('Menutup browser pangkalan ini...');
             await browser.close();
@@ -1804,10 +1921,15 @@ async function run() {
 
         // 8. Perbarui status Sync Job di Laravel
         console.log('\nMenyelesaikan tugas sinkronisasi...');
-        const statusAkhir = completedSuccessfully || (failCount === 0 && !anyPangkalanProcessed) ? 'completed' : 'failed';
+        const statusAkhir = completedSuccessfully ? 'completed' : 'failed';
         let pesanAkhir = `Sinkronisasi selesai. Berhasil: ${successCount}, Gagal: ${failCount}.`;
-        if (!completedSuccessfully && failCount === 0 && successCount > 0) {
-            pesanAkhir = `Sinkronisasi selesai sebagian. Berhasil: ${successCount}. Stok habis di semua akun pangkalan terdaftar.`;
+        
+        if (!completedSuccessfully) {
+            if (successCount === 0 && failCount === 0) {
+                pesanAkhir = `Proses dihentikan. Stok tabung LPG di semua pangkalan Anda sudah habis (0).`;
+            } else if (failCount === 0 && successCount > 0) {
+                pesanAkhir = `Sebagian selesai (Selesai ${successCount}). Bot berhenti karena stok Pangkalan habis.`;
+            }
         }
 
         await api.patch(`/api/rpa-sync/${syncId}`, {

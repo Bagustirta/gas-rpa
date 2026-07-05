@@ -54,6 +54,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return inertia('Billing/Index');
     })->name('billing');
 
+    Route::get('/panduan', function () {
+        return inertia('Panduan');
+    })->name('panduan');
+
     // Akun Pangkalan (CRUD) - Butuh Langganan Aktif
     Route::middleware('subscribed')->prefix('akun-pangkalan')->name('akun-pangkalan.')->group(function () {
         Route::get('/', [AkunPangkalanController::class, 'index'])->name('index');

@@ -47,6 +47,18 @@
             <span>Sync (RPA)</span>
           </button>
 
+          <!-- Riwayat RPA Button -->
+          <button
+            @click="showHistoryModal = true"
+            class="inline-flex items-center justify-center space-x-2 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-semibold text-xs text-slate-700 transition-all duration-200 active:scale-[0.98]"
+            title="Riwayat Sinkronisasi RPA"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Riwayat RPA</span>
+          </button>
+
           <!-- Distribusi Otomatis -->
           <button
             @click="openDistModal"
@@ -96,9 +108,13 @@
            </p>
         </div>
         
-        <div class="relative z-10 flex flex-wrap items-center justify-center md:justify-end gap-2 w-full overflow-hidden hide-scrollbar">
+        <div class="relative z-10 flex flex-wrap items-center justify-center md:justify-end gap-2 w-full overflow-hidden hide-scrollbar"
+             @touchstart="onTouchStart" 
+             @touchend="onTouchEnd"
+             @mouseenter="pauseSlideShow"
+             @mouseleave="resumeSlideShow">
            
-           <button v-if="rpaSlides.length > 1" @click="activeSlide = activeSlide > 0 ? activeSlide - 1 : rpaSlides.length - 1" class="absolute left-0 top-1/2 -translate-y-1/2 -ml-2 p-1.5 rounded-full bg-indigo-800/50 hover:bg-indigo-800 text-white shadow-md z-20 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+           <button v-if="rpaSlides.length > 1" @click="handleSwipeRight" class="absolute left-0 top-1/2 -translate-y-1/2 -ml-2 p-1.5 rounded-full bg-indigo-800/50 hover:bg-indigo-800 text-white shadow-md z-20 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
            </button>
 
@@ -149,13 +165,13 @@
              </div>
            </div>
 
-           <button v-if="rpaSlides.length > 1" @click="activeSlide = activeSlide < rpaSlides.length - 1 ? activeSlide + 1 : 0" class="absolute right-0 top-1/2 -translate-y-1/2 -mr-2 p-1.5 rounded-full bg-indigo-800/50 hover:bg-indigo-800 text-white shadow-md z-20 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+           <button v-if="rpaSlides.length > 1" @click="handleSwipeLeft" class="absolute right-0 top-1/2 -translate-y-1/2 -mr-2 p-1.5 rounded-full bg-indigo-800/50 hover:bg-indigo-800 text-white shadow-md z-20 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
            </button>
            
            <!-- Carousel Dots Indicator -->
-           <div v-if="rpaSlides.length > 1" class="absolute -bottom-1 left-1/2 -translate-x-1/2 flex space-x-1.5">
-              <button v-for="(_, i) in rpaSlides" :key="i" @click="activeSlide = i" :class="activeSlide === i ? 'w-4 bg-white' : 'w-1.5 bg-white/40'" class="h-1.5 rounded-full transition-all duration-300"></button>
+           <div v-if="rpaSlides.length > 1" class="absolute -bottom-2 left-1/2 -translate-x-1/2 flex space-x-1.5">
+              <button v-for="(_, i) in rpaSlides" :key="i" @click="goToSlide(i)" :class="activeSlide === i ? 'w-4 bg-white' : 'w-1.5 bg-white/40'" class="h-1.5 rounded-full transition-all duration-300"></button>
            </div>
         </div>
       </div>
@@ -483,6 +499,73 @@
         </div>
       </transition>
 
+      <!-- Riwayat RPA Modal -->
+      <transition enter-active-class="ease-out duration-200" enter-from-class="opacity-0" enter-to-class="opacity-100" leave-active-class="ease-in duration-100" leave-from-class="opacity-100" leave-to-class="opacity-0">
+        <div v-if="showHistoryModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div class="bg-white border border-slate-200 rounded-2xl max-w-4xl w-full p-4 md:p-6 shadow-2xl max-h-[85vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="font-bold text-slate-900 text-lg flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Riwayat Sinkronisasi RPA
+              </h3>
+              <button @click="showHistoryModal = false" class="text-slate-400 hover:text-slate-600 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            
+            <div class="overflow-y-auto overflow-x-auto pr-2 flex-1 border border-slate-100 rounded-xl">
+              <table class="w-full text-left border-collapse min-w-[600px]">
+                <thead class="sticky top-0 bg-slate-50 z-10">
+                  <tr class="border-b border-slate-200 text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                    <th class="py-2.5 px-4">Waktu</th>
+                    <th class="py-2.5 px-4 text-center">Status</th>
+                    <th class="py-2.5 px-4 text-center">Data</th>
+                    <th class="py-2.5 px-4">Catatan</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-xs">
+                  <tr v-for="history in syncHistory" :key="history.id" class="hover:bg-slate-50/70 transition-colors">
+                    <td class="py-3 px-4 font-mono text-slate-500">
+                      {{ history.created_at }}
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                      <span :class="[
+                        'px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider',
+                        history.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                        history.status === 'failed' ? 'bg-rose-100 text-rose-700' :
+                        'bg-amber-100 text-amber-700 animate-pulse'
+                      ]">
+                        {{ history.status === 'completed' ? 'Selesai' : (history.status === 'failed' ? 'Gagal' : (history.status === 'processing' ? 'Proses' : 'Antre')) }}
+                      </span>
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                      <div class="flex items-center justify-center space-x-2 text-[10px] font-bold">
+                        <span class="text-indigo-500" title="Total">T:{{ history.total_records }}</span>
+                        <span class="text-emerald-500" title="Sukses">S:{{ history.success_records }}</span>
+                        <span class="text-blue-500" title="Limit (Kuota Habis)">L:{{ history.limit_records || 0 }}</span>
+                        <span class="text-rose-500" title="Gagal">G:{{ history.failed_records }}</span>
+                      </div>
+                    </td>
+                    <td class="py-3 px-4 text-slate-600 whitespace-normal break-words max-w-xs md:max-w-md">
+                      {{ history.message || '-' }}
+                    </td>
+                  </tr>
+                  <tr v-if="!syncHistory || syncHistory.length === 0">
+                    <td colspan="4" class="py-8 text-center text-slate-400 text-xs font-semibold">Belum ada riwayat sinkronisasi.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <div class="mt-4 flex justify-end">
+              <button @click="showHistoryModal = false" class="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs shadow-md transition-all active:scale-95">Tutup</button>
+            </div>
+          </div>
+        </div>
+      </transition>
+
       <!-- RPA Confirmation Modal -->
       <transition enter-active-class="ease-out duration-200" enter-from-class="opacity-0" enter-to-class="opacity-100" leave-active-class="ease-in duration-100" leave-from-class="opacity-100" leave-to-class="opacity-0">
         <div v-if="showRpaConfirmModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
@@ -539,7 +622,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue';
 import { usePage, useForm, router, Link } from '@inertiajs/vue3';
 import AppLayout from '../../Layouts/AppLayout.vue';
 
@@ -548,6 +631,7 @@ const authUserId = computed(() => page.props.auth.user.id);
 const transaksis = computed(() => page.props.transaksis);
 const rpaSummary = computed(() => page.props.rpaSummary || { total: 0, sukses: 0, kuota_habis: 0, belum_lapor: 0, gagal: 0, breakdowns: [] });
 const pangkalans = computed(() => page.props.pangkalans);
+const syncHistory = computed(() => page.props.syncHistory || []);
 
 // Carousel state
 const activeSlide = ref(0);
@@ -566,6 +650,72 @@ const rpaSlides = computed(() => {
   }
   return slides;
 });
+
+// Fitur Geser (Swipe) untuk Mobile & Auto Slide
+const touchStartX = ref(0);
+const touchEndX = ref(0);
+let slideInterval = null;
+
+const onTouchStart = (e) => {
+  touchStartX.value = e.changedTouches[0].screenX;
+  pauseSlideShow();
+};
+
+const onTouchEnd = (e) => {
+  touchEndX.value = e.changedTouches[0].screenX;
+  handleSwipe();
+  resumeSlideShow();
+};
+
+const handleSwipe = () => {
+  if (rpaSlides.value.length <= 1) return;
+  if (touchEndX.value < touchStartX.value - 40) {
+    handleSwipeLeft();
+  }
+  if (touchEndX.value > touchStartX.value + 40) {
+    handleSwipeRight();
+  }
+};
+
+const handleSwipeLeft = () => {
+  activeSlide.value = activeSlide.value < rpaSlides.value.length - 1 ? activeSlide.value + 1 : 0;
+  pauseSlideShow();
+  resumeSlideShow();
+};
+
+const handleSwipeRight = () => {
+  activeSlide.value = activeSlide.value > 0 ? activeSlide.value - 1 : rpaSlides.value.length - 1;
+  pauseSlideShow();
+  resumeSlideShow();
+};
+
+const goToSlide = (index) => {
+  activeSlide.value = index;
+  pauseSlideShow();
+  resumeSlideShow();
+};
+
+const pauseSlideShow = () => {
+  if (slideInterval) clearInterval(slideInterval);
+};
+
+const resumeSlideShow = () => {
+  pauseSlideShow();
+  if (rpaSlides.value.length > 1) {
+    slideInterval = setInterval(() => {
+      activeSlide.value = activeSlide.value < rpaSlides.value.length - 1 ? activeSlide.value + 1 : 0;
+    }, 4000); // Ganti tiap 4 detik
+  }
+};
+
+// Start slideshow if multiple slides exist
+watch(rpaSlides, (newVal) => {
+  if (newVal.length > 1) {
+    resumeSlideShow();
+  } else {
+    pauseSlideShow();
+  }
+}, { immediate: true });
 
 const filters = reactive({
   search: page.props.filters?.search || '',
@@ -601,6 +751,7 @@ const transaksiPages = computed(() => {
 
 const showDeleteModal = ref(false);
 const showDistModal = ref(false);
+const showHistoryModal = ref(false);
 const activeTransaksi = ref(null);
 
 // RPA Confirmation Modal State
@@ -787,6 +938,7 @@ onUnmounted(() => {
   if (window.Echo && authUserId.value) {
     window.Echo.leave(`rpa-progress.${authUserId.value}`);
   }
+  pauseSlideShow();
 });
 </script>
 

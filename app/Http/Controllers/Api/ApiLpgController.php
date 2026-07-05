@@ -405,6 +405,27 @@ class ApiLpgController extends Controller
     }
 
     /**
+     * GET /api/rpa-sync/{id}
+     *
+     * Mengecek status sinkronisasi saat ini (digunakan bot untuk mengecek apakah job di-reset/dibatalkan).
+     */
+    public function getSyncStatus(int $id): JsonResponse
+    {
+        $sync = \App\Models\RpaSync::find($id);
+        if (!$sync) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Sync job tidak ditemukan.',
+            ], 404);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'sync'   => $sync,
+        ]);
+    }
+
+    /**
      * POST /api/gagal-lapor/{id}
      *
      * Menandai transaksi gagal dilaporkan ke MAP Pertamina dengan pesan/alasan tertentu.
