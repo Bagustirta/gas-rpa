@@ -10,6 +10,7 @@ class RpaSync extends Model
         'status',
         'total_records',
         'success_records',
+        'limit_records',
         'failed_records',
         'current_pangkalan',
         'message',

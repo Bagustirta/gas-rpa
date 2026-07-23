@@ -1,25 +1,38 @@
 {
   "apps": [
     {
+      "name": "landingpage",
+      "script": "./node_modules/vite/bin/vite.js",
+      "args": "--port 8083",
+      "cwd": "d:\\laragon\\www\\landingpage",
+      "interpreter": "node"
+    },
+    {
       "name": "reverb-pos",
-      "script": "artisan",
+      "script": "d:\\laragon\\www\\pos-anom\\artisan",
       "interpreter": "php",
-      "args": "reverb:start --host=127.0.0.1 --port=8080",
+      "args": "reverb:start --host=127.0.0.1 --port=8081",
       "cwd": "d:\\laragon\\www\\pos-anom"
     },
     {
       "name": "reverb-gas",
-      "script": "artisan",
+      "script": "d:\\laragon\\www\\gas\\artisan",
       "interpreter": "php",
-      "args": "reverb:start --host=127.0.0.1 --port=8081",
+      "args": "reverb:start --host=127.0.0.1 --port=8082",
       "cwd": "d:\\laragon\\www\\gas"
     },
     {
       "name": "queue-gas",
-      "script": "artisan",
+      "script": "d:\\laragon\\www\\gas\\artisan",
       "interpreter": "php",
       "args": "queue:work",
       "cwd": "d:\\laragon\\www\\gas"
+    },
+    {
+      "name": "rpa-bot",
+      "script": "bot.js",
+      "cwd": "d:\\laragon\\www\\gas\\rpa-bot",
+      "interpreter": "node"
     }
   ]
 }

@@ -87,4 +87,20 @@ class UserController extends Controller
 
         return redirect()->back()->with('success', 'Akun Agen berhasil dihapus.');
     }
+
+    public function quickRenew(Request $request, User $user)
+    {
+        $days = $request->integer('days', 30);
+        
+        $baseDate = ($user->subscription_expired_at && $user->subscription_expired_at->isFuture())
+            ? $user->subscription_expired_at
+            : \Carbon\Carbon::now();
+
+        $user->update([
+            'subscription_status' => 'aktif',
+            'subscription_expired_at' => $baseDate->copy()->addDays($days),
+        ]);
+
+        return redirect()->back()->with('success', "Masa langganan {$user->name} berhasil diperpanjang +{$days} hari.");
+    }
 }

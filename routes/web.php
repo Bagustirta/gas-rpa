@@ -6,6 +6,7 @@ use App\Http\Controllers\AkunPangkalanController;
 use App\Http\Controllers\PelangganController;
 use App\Http\Controllers\TransaksiGasController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Auth;
 
 use App\Http\Controllers\RegisterController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
@@ -13,10 +14,10 @@ use Illuminate\Foundation\Auth\EmailVerificationRequest;
 // Guest Routes
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 
     Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
-    Route::post('/register', [RegisterController::class, 'register']);
+    Route::post('/register', [RegisterController::class, 'register'])->middleware('throttle:3,1');
 });
 
 // Authenticated but unverified can see this
@@ -43,7 +44,9 @@ Route::middleware('auth')->group(function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     // Dashboard & Billing
     Route::get('/', function () {
-        if (auth()->check() && auth()->user()->isSuperAdmin()) {
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
+        if ($user && $user->isSuperAdmin()) {
             return redirect()->route('superadmin.dashboard');
         }
         return redirect()->route('dashboard');
@@ -85,10 +88,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/{transaksiGas}', [TransaksiGasController::class, 'destroy'])->name('destroy');
         Route::post('/{transaksiGas}/lapor', [TransaksiGasController::class, 'tandaiLapor'])->name('tandai-lapor');
         Route::post('/lapor-massal', [TransaksiGasController::class, 'tandaiLaporMassal'])->name('tandai-lapor-massal');
-        Route::post('/trigger-rpa', [TransaksiGasController::class, 'triggerRpa'])->name('trigger-rpa');
-        Route::post('/audit-quota', [TransaksiGasController::class, 'auditQuota'])->name('audit-quota');
-        Route::post('/reset-sync', [TransaksiGasController::class, 'resetSync'])->name('reset-sync');
-        Route::post('/distribusi-otomatis', [TransaksiGasController::class, 'distribusiOtomatis'])->name('distribusi-otomatis');
+        Route::post('/trigger-rpa', [TransaksiGasController::class, 'triggerRpa'])->middleware('throttle:5,1')->name('trigger-rpa');
+        Route::post('/audit-quota', [TransaksiGasController::class, 'auditQuota'])->middleware('throttle:5,1')->name('audit-quota');
+        Route::post('/reset-sync', [TransaksiGasController::class, 'resetSync'])->middleware('throttle:5,1')->name('reset-sync');
+        Route::post('/distribusi-otomatis', [TransaksiGasController::class, 'distribusiOtomatis'])->middleware('throttle:10,1')->name('distribusi-otomatis');
     });
     // Super Admin: Manajemen Agen/User & Monitoring
     Route::middleware('super_admin')->prefix('superadmin')->group(function () {
@@ -98,6 +101,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', [\App\Http\Controllers\UserController::class, 'index'])->name('index');
             Route::post('/', [\App\Http\Controllers\UserController::class, 'store'])->name('store');
             Route::put('/{user}', [\App\Http\Controllers\UserController::class, 'update'])->name('update');
+            Route::post('/{user}/renew', [\App\Http\Controllers\UserController::class, 'quickRenew'])->name('renew');
             Route::delete('/{user}', [\App\Http\Controllers\UserController::class, 'destroy'])->name('destroy');
         });
     });
@@ -105,11 +109,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 // Internal API / badges compatibility
 Route::get('/api/internal/badge-transaksi', function () {
-    if (!auth()->check()) return response()->json(['count' => 0]);
+    if (!Auth::check()) return response()->json(['count' => 0]);
     $count = \App\Models\TransaksiGas::whereMonth('tanggal_transaksi', now()->month)
         ->whereYear('tanggal_transaksi', now()->year)
         ->whereHas('akunPangkalan', function ($q) {
-            $q->where('user_id', auth()->id());
+            $q->where('user_id', Auth::id());
         })
         ->count();
     return response()->json(['count' => $count]);

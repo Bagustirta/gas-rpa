@@ -18,6 +18,10 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
+        if ($request->filled('website_hp')) {
+            return back()->withErrors(['email' => 'Permintaan tidak valid.']);
+        }
+
         $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required'],

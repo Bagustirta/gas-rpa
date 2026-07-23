@@ -96,8 +96,19 @@
             <tbody class="divide-y divide-slate-100 text-sm">
               <tr v-for="pelanggan in pelanggans.data" :key="pelanggan.id" class="hover:bg-slate-50/70 transition-all duration-150">
                 <!-- NIK -->
-                <td class="py-3.5 px-4 font-mono text-slate-800 tracking-wider select-all">
-                  {{ pelanggan.nik }}
+                <td class="py-3.5 px-4 font-mono text-slate-800 tracking-wider">
+                  <div class="flex items-center space-x-2">
+                    <span>{{ revealedNikMap[pelanggan.id] ? pelanggan.nik : maskNik(pelanggan.nik) }}</span>
+                    <button @click="toggleNikShow(pelanggan.id)" class="text-slate-400 hover:text-indigo-600 transition-colors p-0.5" :title="revealedNikMap[pelanggan.id] ? 'Sembunyikan NIK' : 'Tampilkan NIK'">
+                      <svg v-if="revealedNikMap[pelanggan.id]" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.88 9.88a3 3 0 104.24 4.24m-1.41-5.65L18.36 18.36M1 1l22 22" />
+                      </svg>
+                      <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    </button>
+                  </div>
                 </td>
                 <!-- Status -->
                 <td class="py-3.5 px-4 text-center">
@@ -354,6 +365,16 @@ const isEditing = ref(false);
 const showImportModal = ref(false);
 const showDeleteModal = ref(false);
 const activePelanggan = ref(null);
+
+const revealedNikMap = ref({});
+const toggleNikShow = (id) => {
+  revealedNikMap.value[id] = !revealedNikMap.value[id];
+};
+
+const maskNik = (nik) => {
+  if (!nik || nik.length < 12) return nik || '-';
+  return nik.substring(0, 6) + '******' + nik.substring(12);
+};
 
 const form = useForm({
   nik: '',

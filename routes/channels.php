@@ -15,3 +15,7 @@ Broadcast::channel('audit-progress.{userId}', function ($user, $userId) {
 Broadcast::channel('rpa-progress.{userId}', function ($user, $userId) {
     return (int) $user->id === (int) $userId;
 });
+
+Broadcast::channel('data-gas.{userId}', function ($user, $userId) {
+    return (int) $user->id === (int) $userId;
+});

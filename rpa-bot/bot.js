@@ -990,10 +990,13 @@ async function run() {
         console.log(`Ditemukan ${pangkalanList.length} akun pangkalan.`);
 
         let successCount = 0;
+        let limitCount = 0;
         let failCount = 0;
         let completedSuccessfully = false;
         let anyPangkalanProcessed = false;
         let pangkalanRetries = {}; // Untuk melacak jumlah retry per pangkalan
+        let pangkalanHabisList = [];
+        let pangkalanSisaList = [];
 
         // Loop untuk login berantai ke masing-masing pangkalan
         for (let pIdx = 0; pIdx < pangkalanList.length; pIdx++) {
@@ -1035,7 +1038,7 @@ async function run() {
             const browser = await puppeteer.launch({
                 headless: true, // Berjalan secara tersembunyi
                 defaultViewport: null,
-                args: ['--start-maximized', '--no-sandbox', '--disable-setuid-sandbox']
+                args: ['--start-maximized', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
             });
             activeBrowser = browser; // Set ke global untuk cleanup jika Ctrl+C
 
@@ -1220,6 +1223,14 @@ async function run() {
                 const finalUrl = page.url();
                 console.log(`🔴 Gagal login setelah 60 detik. Posisi URL terakhir: ${finalUrl}`);
                 
+                // Ambil screenshot untuk keperluan debug
+                try {
+                    await page.screenshot({ path: 'error-timeout-login.png', fullPage: true });
+                    console.log('📸 Screenshot halaman terakhir berhasil disimpan sebagai rpa-bot/error-timeout-login.png');
+                } catch (err) {
+                    console.log('Gagal mengambil screenshot:', err.message);
+                }
+                
                 // Coba ambil pesan error merah di halaman
                 const errorMsg = await page.evaluate(() => {
                     const errors = Array.from(document.querySelectorAll('.text-red-500, .text-danger, .error, [role="alert"]'));
@@ -1283,6 +1294,7 @@ async function run() {
             }
 
             if (isStokHabis) {
+                if (!pangkalanHabisList.includes(merchantName)) pangkalanHabisList.push(merchantName);
                 console.log(`🔴 Stok di Pangkalan "${merchantName}" kosong/0. Beralih ke pangkalan berikutnya...`);
                 console.log('Mengirim sinyal stok kosong ke Laravel untuk pangkalan ini...');
                 try {
@@ -1297,6 +1309,8 @@ async function run() {
                 activeBrowser = null;
                 continue; // Lanjut ke pangkalan selanjutnya
             }
+
+            if (!pangkalanSisaList.includes(merchantName)) pangkalanSisaList.push(merchantName);
 
             // Klik tombol "Catat Penjualan" secara otomatis jika berada di dashboard
             try {
@@ -1593,6 +1607,7 @@ async function run() {
                             console.error('Gagal mengirim sinyal stok kosong ke Laravel:', e.message);
                         }
                         pangkalanStokHabis = true;
+                        if (!pangkalanHabisList.includes(merchantName)) pangkalanHabisList.push(merchantName);
                         throw new Error('FATAL: STOK_MYPERTAMINA_KOSONG');
                     }
 
@@ -1853,9 +1868,10 @@ async function run() {
 
                     if (err.message.includes('STOK_MYPERTAMINA_KOSONG')) {
                         pangkalanStokHabis = true;
+                        if (!pangkalanHabisList.includes(merchantName)) pangkalanHabisList.push(merchantName);
                     } else if (err.message.includes('FATAL_LIMIT_EXCEEDED')) {
                         console.log('⚠️ Pelanggan melebihi batas kewajaran pembelian (Limit Habis Nasional). Melaporkan ke database...');
-                        failCount++;
+                        limitCount++;
                         try {
                             await api.post(`/api/gagal-lapor/${trx.id}`, {
                                 message: `Gagal: Melebihi batas kewajaran pembelian LPG 3 kg bulan ini.`
@@ -1921,16 +1937,54 @@ async function run() {
 
         // 8. Perbarui status Sync Job di Laravel
         console.log('\nMenyelesaikan tugas sinkronisasi...');
+        
+        pangkalanSisaList = pangkalanSisaList.filter(p => !pangkalanHabisList.includes(p));
+        let semuaHabis = (pangkalanHabisList.length > 0 && pangkalanSisaList.length === 0);
+
+        if (semuaHabis) {
+            completedSuccessfully = true;
+        }
+
+        const syncDetail = await api.get(`/api/rpa-sync/${syncId}`).then(res => res.data.sync).catch(() => null);
+        if (syncDetail) {
+            limitCount = syncDetail.limit_records ?? limitCount;
+            failCount = syncDetail.failed_records ?? failCount;
+            successCount = syncDetail.success_records ?? successCount;
+        }
+
         const statusAkhir = completedSuccessfully ? 'completed' : 'failed';
-        let pesanAkhir = `Sinkronisasi selesai. Berhasil: ${successCount}, Gagal: ${failCount}.`;
+        let detailHitungan = limitCount > 0 
+            ? `Berhasil: ${successCount}, Limit: ${limitCount}, Gagal: ${failCount}` 
+            : `Berhasil: ${successCount}, Gagal: ${failCount}`;
+        let pesanAkhir = `Sinkronisasi selesai. ${detailHitungan}.`;
         
         if (!completedSuccessfully) {
-            if (successCount === 0 && failCount === 0) {
-                pesanAkhir = `Proses dihentikan. Stok tabung LPG di semua pangkalan Anda sudah habis (0).`;
-            } else if (failCount === 0 && successCount > 0) {
-                pesanAkhir = `Sebagian selesai (Selesai ${successCount}). Bot berhenti karena stok Pangkalan habis.`;
+            if (successCount === 0 && failCount === 0 && limitCount === 0) {
+                pesanAkhir = `Proses dihentikan (Gagal).`;
+            } else if (failCount === 0 && limitCount === 0 && successCount > 0) {
+                pesanAkhir = `Sebagian selesai (Selesai ${successCount}).`;
             }
+        } else {
+             if (successCount === 0 && failCount === 0 && limitCount === 0 && semuaHabis) {
+                 pesanAkhir = `Proses dihentikan. Stok tabung LPG di semua pangkalan Anda sudah habis (0).`;
+             } else if (successCount > 0 && failCount === 0 && limitCount === 0 && semuaHabis) {
+                 pesanAkhir = `Sebagian selesai (Selesai ${successCount}). Bot berhenti karena stok Pangkalan habis.`;
+             }
         }
+        
+        let statusPangkalanDesc = "";
+        if (pangkalanHabisList.length > 0 || pangkalanSisaList.length > 0) {
+            let descParts = [];
+            if (pangkalanSisaList.length > 0) {
+                descParts.push(`Ada Sisa: ${pangkalanSisaList.join(', ')}`);
+            }
+            if (pangkalanHabisList.length > 0) {
+                descParts.push(`Habis: ${pangkalanHabisList.join(', ')}`);
+            }
+            statusPangkalanDesc = ` [Info Stok - ${descParts.join(' | ')}]`;
+        }
+        
+        pesanAkhir += statusPangkalanDesc;
 
         await api.patch(`/api/rpa-sync/${syncId}`, {
             status: statusAkhir,

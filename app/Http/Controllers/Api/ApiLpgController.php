@@ -197,6 +197,10 @@ class ApiLpgController extends Controller
 
         $userId = $transaksi->akunPangkalan->user_id ?? null;
         if ($userId) {
+            try {
+                event(new \App\Events\DataGasUpdated($userId));
+            } catch (\Exception $e) {}
+            
             $sync = \App\Models\RpaSync::where('user_id', $userId)->where('status', 'processing')->first();
             if ($sync) {
                 $sync->increment('success_records');
@@ -335,6 +339,13 @@ class ApiLpgController extends Controller
                     'started_at' => now()
                 ]);
 
+                try {
+                    $summary = $sync->calculateSummary();
+                    event(new \App\Events\RpaProgressUpdated($sync->user_id, 'Memulai Sinkronisasi', null, 'processing', $summary));
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Broadcast error on getPendingSync: ' . $e->getMessage());
+                }
+
                 return response()->json([
                     'status' => 'success',
                     'sync'   => [
@@ -381,6 +392,18 @@ class ApiLpgController extends Controller
         if (isset($data['status']) && in_array($data['status'], ['completed', 'failed']) && !$sync->completed_at) {
             $sync->started_at = now(); // Ensure started_at is also set if they skip processing
             $sync->completed_at = now();
+            
+            // Kirim Web Push Notification
+            try {
+                $user = \App\Models\User::find($sync->user_id);
+                if ($user) {
+                    $title = $data['status'] === 'completed' ? 'Bot RPA Selesai!' : 'Bot RPA Gagal/Berhenti';
+                    $msg = $data['message'] ?? 'Tugas sinkronisasi RPA telah selesai dikerjakan.';
+                    $user->notify(new \App\Notifications\RpaCompletedNotification($title, $msg));
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('WebPush error: ' . $e->getMessage());
+            }
         }
 
         $sync->update($data);
@@ -485,7 +508,7 @@ class ApiLpgController extends Controller
                     ]);
                 } else {
                     $transaksi->update([
-                        'status_lapor' => 'sukses',
+                        'status_lapor' => 'kuota_habis',
                         'dilaporkan_pertamina' => true,
                         'catatan_lapor' => 'Selesai: Kuota 4/4 Habis (Beli di pangkalan lain)',
                         'waktu_dilaporkan' => Carbon::now(),
@@ -496,9 +519,18 @@ class ApiLpgController extends Controller
 
         $userId = $transaksi->akunPangkalan->user_id ?? null;
         if ($userId) {
+            try {
+                event(new \App\Events\DataGasUpdated($userId));
+            } catch (\Exception $e) {}
+
             $sync = \App\Models\RpaSync::where('user_id', $userId)->where('status', 'processing')->first();
             if ($sync) {
-                $sync->increment('failed_records');
+                $transaksiUpdated = $transaksi->fresh();
+                if ($transaksiUpdated->status_lapor === 'kuota_habis') {
+                    $sync->increment('limit_records');
+                } else {
+                    $sync->increment('failed_records');
+                }
                 $sync->refresh();
                 
                 $summary = $sync->calculateSummary();
@@ -615,76 +647,110 @@ class ApiLpgController extends Controller
         $pangkalan = $pangkalanQuery->first();
         $pangkalanId = $pangkalan?->id;
 
-        // Hapus transaksi yang SUDAH DILAPORKAN untuk pangkalan ini bulan ini
-        // karena MyPertamina adalah sumber kebenaran saat audit.
-        $pelanggan->transaksiGas()
+        // Hitung total tabung sukses/dilaporkan saat ini (dari SEMUA pangkalan bulan ini)
+        $totalSukses = $pelanggan->transaksiGas()
             ->whereMonth('tanggal_transaksi', Carbon::now()->month)
             ->whereYear('tanggal_transaksi', Carbon::now()->year)
-            ->where('akun_pangkalan_id', $pangkalanId)
             ->where(function ($query) {
                 $query->where('status_lapor', 'sukses')
                       ->orWhere('dilaporkan_pertamina', true);
-            })
-            ->delete();
+            })->sum('jumlah_tabung');
 
-        // Ambil transaksi pending/gagal untuk pangkalan ini bulan ini
-        $pendingTrans = $pelanggan->transaksiGas()
-            ->whereMonth('tanggal_transaksi', Carbon::now()->month)
-            ->whereYear('tanggal_transaksi', Carbon::now()->year)
-            ->where('akun_pangkalan_id', $pangkalanId)
-            ->where(function ($query) {
-                $query->where('status_lapor', '!=', 'sukses')
-                      ->where('dilaporkan_pertamina', false);
-            })
-            ->orderBy('tanggal_transaksi', 'asc')
-            ->get();
+        $difference = $targetCount - $totalSukses;
 
-        foreach ($pendingTrans as $trans) {
-            if ($targetCount <= 0) {
-                break;
-            }
-            $jumlah = $trans->jumlah_tabung;
-            if ($targetCount >= $jumlah) {
-                // Transaksi ini sudah terlaporkan sepenuhnya di MyPertamina
-                $trans->update([
-                    'status_lapor' => 'sukses',
-                    'dilaporkan_pertamina' => true,
-                    'catatan_lapor' => "Disesuaikan saat Audit: {$pangkalanName}",
-                ]);
-                $targetCount -= $jumlah;
-            } else {
-                // Sebagian dari transaksi ini sudah terlaporkan
-                // Pecah transaksi: yang sukses disesuaikan, sisanya tetap pending
-                $sisa = $jumlah - $targetCount;
-                $trans->update([
-                    'jumlah_tabung' => $targetCount,
-                    'status_lapor' => 'sukses',
-                    'dilaporkan_pertamina' => true,
-                    'catatan_lapor' => "Disesuaikan saat Audit (Partial): {$pangkalanName}",
-                ]);
+        if ($difference > 0) {
+            // MyPertamina mencatat LEBIH BANYAK tabung daripada yang berstatus sukses di database kita.
+            // Ini berarti ada transaksi pending yang sebenarnya sudah "sukses" (terinput),
+            // atau pangkalan menginput manual secara langsung di luar aplikasi.
+            
+            // Ambil semua transaksi pending/gagal untuk SEMUA pangkalan
+            $pendingTrans = $pelanggan->transaksiGas()
+                ->whereMonth('tanggal_transaksi', Carbon::now()->month)
+                ->whereYear('tanggal_transaksi', Carbon::now()->year)
+                ->where(function ($query) {
+                    $query->where('status_lapor', '!=', 'sukses')
+                          ->where('dilaporkan_pertamina', false);
+                })
+                ->orderBy('tanggal_transaksi', 'asc') // Konfirmasi dari yang terlama
+                ->get();
+
+            foreach ($pendingTrans as $trans) {
+                if ($difference <= 0) break;
                 
+                $jumlah = $trans->jumlah_tabung;
+                if ($difference >= $jumlah) {
+                    $trans->update([
+                        'status_lapor' => 'sukses',
+                        'dilaporkan_pertamina' => true,
+                        'catatan_lapor' => "Disesuaikan saat Audit RPA",
+                    ]);
+                    $difference -= $jumlah;
+                } else {
+                    // Pecah transaksi pending
+                    $sisa = $jumlah - $difference;
+                    $trans->update([
+                        'jumlah_tabung' => $difference,
+                        'status_lapor' => 'sukses',
+                        'dilaporkan_pertamina' => true,
+                        'catatan_lapor' => "Disesuaikan (Partial) saat Audit",
+                    ]);
+                    
+                    // Buat sisa tabung sebagai pending baru
+                    $pelanggan->transaksiGas()->create([
+                        'akun_pangkalan_id' => $trans->akun_pangkalan_id,
+                        'jumlah_tabung' => $sisa,
+                        'tanggal_transaksi' => $trans->tanggal_transaksi,
+                        'status_lapor' => 'belum_lapor',
+                        'dilaporkan_pertamina' => false,
+                        'catatan_lapor' => 'Sisa dari pecahan transaksi audit',
+                    ]);
+                    $difference = 0;
+                }
+            }
+
+            // Jika masih ada sisa tabung (berarti transaksi murni dari luar aplikasi kita)
+            if ($difference > 0) {
                 $pelanggan->transaksiGas()->create([
                     'akun_pangkalan_id' => $pangkalanId,
-                    'jumlah_tabung' => $sisa,
-                    'tanggal_transaksi' => $trans->tanggal_transaksi,
-                    'status_lapor' => 'belum_lapor',
-                    'dilaporkan_pertamina' => false,
-                    'catatan_lapor' => 'Sisa dari pecahan transaksi audit',
+                    'jumlah_tabung' => $difference,
+                    'tanggal_transaksi' => now(),
+                    'status_lapor' => 'sukses',
+                    'dilaporkan_pertamina' => true,
+                    'catatan_lapor' => "Audit Pangkalan (Trx Luar App): {$pangkalanName}",
                 ]);
-                $targetCount = 0;
             }
-        }
+        } elseif ($difference < 0) {
+            // MyPertamina mencatat LEBIH SEDIKIT tabung daripada yang berstatus sukses di database kita.
+            // Hal ini tidak wajar, tapi mungkin terjadi jika ada transaksi yang dihapus/dibatalkan di MAP Pertamina.
+            $overage = abs($difference);
+            
+            // Prioritaskan membatalkan transaksi sukses yang dikaitkan ke Pangkalan saat ini
+            $suksesTrans = $pelanggan->transaksiGas()
+                ->whereMonth('tanggal_transaksi', Carbon::now()->month)
+                ->whereYear('tanggal_transaksi', Carbon::now()->year)
+                ->where(function ($query) {
+                    $query->where('status_lapor', 'sukses')
+                          ->orWhere('dilaporkan_pertamina', true);
+                })
+                ->where('akun_pangkalan_id', $pangkalanId)
+                ->orderBy('tanggal_transaksi', 'desc') // Batalkan dari yang paling baru
+                ->get();
 
-        // Jika masih ada targetCount tersisa (tidak ada transaksi pending yang cocok atau targetCount lebih besar)
-        if ($targetCount > 0) {
-            $pelanggan->transaksiGas()->create([
-                'akun_pangkalan_id' => $pangkalanId,
-                'jumlah_tabung' => $targetCount,
-                'tanggal_transaksi' => now(),
-                'status_lapor' => 'sukses',
-                'dilaporkan_pertamina' => true,
-                'catatan_lapor' => "Audit Pangkalan: {$pangkalanName}",
-            ]);
+            foreach ($suksesTrans as $trans) {
+                if ($overage <= 0) break;
+                
+                $jumlah = $trans->jumlah_tabung;
+                if ($overage >= $jumlah) {
+                    $trans->delete();
+                    $overage -= $jumlah;
+                } else {
+                    $trans->update([
+                        'jumlah_tabung' => $jumlah - $overage,
+                        'catatan_lapor' => "Disesuaikan (Dikurangi) saat Audit",
+                    ]);
+                    $overage = 0;
+                }
+            }
         }
 
         // Hitung total akumulasi SETELAH update
@@ -720,6 +786,12 @@ class ApiLpgController extends Controller
         // Hitung ulang total akumulasi final setelah pembersihan
         $totalSesudah = $pelanggan->totalTabungBulanIni();
         $isNowFull = ($totalSesudah >= 4);
+
+        if ($pelanggan->user_id) {
+            try {
+                event(new \App\Events\DataGasUpdated($pelanggan->user_id));
+            } catch (\Exception $e) {}
+        }
 
         return response()->json([
             'status' => 'success',

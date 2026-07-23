@@ -21,6 +21,10 @@ class RegisterController extends Controller
 
     public function register(Request $request)
     {
+        if ($request->filled('website_hp')) {
+            return back()->withErrors(['email' => 'Pendaftaran tidak valid.']);
+        }
+
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],

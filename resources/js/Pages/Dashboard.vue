@@ -146,7 +146,18 @@
               <tr v-for="item in customersQuota.data" :key="item.id" class="hover:bg-slate-50/70 transition-all duration-150">
                 <!-- NIK -->
                 <td class="py-3.5 px-4 font-mono text-slate-700 tracking-wider">
-                  {{ item.nik }}
+                  <div class="flex items-center space-x-2">
+                    <span>{{ revealedNikMap[item.id] ? item.nik : maskNik(item.nik) }}</span>
+                    <button @click="toggleNikShow(item.id)" class="text-slate-400 hover:text-indigo-600 transition-colors p-0.5" :title="revealedNikMap[item.id] ? 'Sembunyikan NIK' : 'Tampilkan NIK'">
+                      <svg v-if="revealedNikMap[item.id]" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.88 9.88a3 3 0 104.24 4.24m-1.41-5.65L18.36 18.36M1 1l22 22" />
+                      </svg>
+                      <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    </button>
+                  </div>
                 </td>
                 <!-- Total Terpakai -->
                 <td class="py-3.5 px-4 text-center">
@@ -221,7 +232,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { usePage, Link, router } from '@inertiajs/vue3';
 import AppLayout from '../Layouts/AppLayout.vue';
 import LiveMonitoringWidget from '../Components/LiveMonitoringWidget.vue';
@@ -229,6 +240,16 @@ import LiveMonitoringWidget from '../Components/LiveMonitoringWidget.vue';
 const page = usePage();
 const stats = computed(() => page.props.stats);
 const customersQuota = computed(() => page.props.customersQuota);
+
+const revealedNikMap = ref({});
+const toggleNikShow = (id) => {
+  revealedNikMap.value[id] = !revealedNikMap.value[id];
+};
+
+const maskNik = (nik) => {
+  if (!nik || nik.length < 12) return nik || '-';
+  return nik.substring(0, 6) + '******' + nik.substring(12);
+};
 
 const filters = reactive({
   search: page.props.filters?.search || '',
@@ -272,6 +293,23 @@ const applyFilters = () => {
 const currentDate = computed(() => {
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   return new Date().toLocaleDateString('id-ID', options);
+});
+
+const authUserId = computed(() => page.props.auth?.user?.id);
+
+onMounted(() => {
+  if (window.Echo && authUserId.value) {
+    window.Echo.private(`data-gas.${authUserId.value}`)
+      .listen('DataGasUpdated', (e) => {
+        router.reload({ only: ['stats', 'customersQuota'], preserveScroll: true });
+      });
+  }
+});
+
+onUnmounted(() => {
+  if (window.Echo && authUserId.value) {
+    window.Echo.leave(`data-gas.${authUserId.value}`);
+  }
 });
 </script>
 

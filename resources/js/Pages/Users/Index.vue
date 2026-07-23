@@ -84,6 +84,10 @@
                     <span v-else-if="user.subscription_expired_at" class="text-[10px] text-slate-500 font-mono">
                       s/d {{ formatDate(user.subscription_expired_at) }}
                     </span>
+                    <div v-if="user.role !== 'super_admin'" class="mt-1 flex items-center justify-center space-x-1">
+                      <button @click="quickRenew(user, 30)" class="px-1.5 py-0.5 rounded bg-emerald-500 hover:bg-emerald-600 text-white text-[9px] font-bold shadow-xs transition-all" title="Perpanjang +30 Hari (1 Bulan)">+1 Bln</button>
+                      <button @click="quickRenew(user, 365)" class="px-1.5 py-0.5 rounded bg-indigo-500 hover:bg-indigo-600 text-white text-[9px] font-bold shadow-xs transition-all" title="Perpanjang +365 Hari (1 Tahun)">+1 Thn</button>
+                    </div>
                   </div>
                 </td>
                 <td class="py-4 px-6 text-center">
@@ -342,6 +346,12 @@ const submitForm = () => {
 const confirmDelete = (user) => {
   if (confirm(`Apakah Anda yakin ingin menghapus akun agen "${user.name}"? Ini tidak dapat dibatalkan.`)) {
     router.delete(route('users.destroy', user.id));
+  }
+};
+
+const quickRenew = (user, days) => {
+  if (confirm(`Perpanjang langganan ${user.name} selama ${days} hari?`)) {
+    router.post(route('users.renew', user.id), { days });
   }
 };
 

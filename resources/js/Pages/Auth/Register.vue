@@ -19,6 +19,9 @@
         <h3 class="text-lg font-bold text-slate-800 mb-6">Daftar Akun (Trial 7 Hari)</h3>
 
         <form @submit.prevent="submit" class="space-y-5">
+          <!-- Honeypot Bot Trap -->
+          <input type="text" name="website_hp" v-model="form.website_hp" style="display:none !important; position:absolute; left:-9999px;" tabindex="-1" autocomplete="off" />
+
           <!-- Name Field -->
           <div>
             <label for="name" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Nama Lengkap</label>
@@ -134,6 +137,7 @@ const form = useForm({
   email: '',
   password: '',
   password_confirmation: '',
+  website_hp: '',
 });
 
 const submit = () => {

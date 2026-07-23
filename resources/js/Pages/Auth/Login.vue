@@ -19,6 +19,9 @@
         <h3 class="text-lg font-bold text-slate-800 mb-6">Masuk ke Dashboard</h3>
 
         <form @submit.prevent="submit" class="space-y-5">
+          <!-- Honeypot Bot Trap -->
+          <input type="text" name="website_hp" v-model="form.website_hp" style="display:none !important; position:absolute; left:-9999px;" tabindex="-1" autocomplete="off" />
+
           <!-- Email Field -->
           <div>
             <label for="email" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Alamat Email</label>
@@ -109,6 +112,7 @@ const form = useForm({
   email: '',
   password: '',
   remember: false,
+  website_hp: '',
 });
 
 const submit = () => {

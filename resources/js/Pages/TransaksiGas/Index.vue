@@ -292,7 +292,18 @@
                 <!-- NIK -->
                 <td class="py-3.5 px-4">
                   <div class="flex flex-col">
-                    <span class="font-mono text-slate-800 tracking-wider select-all">{{ t.pelanggan_nik }}</span>
+                    <div class="flex items-center space-x-2 font-mono text-slate-800 tracking-wider">
+                      <span>{{ revealedNikMap[t.id] ? t.pelanggan_nik : maskNik(t.pelanggan_nik) }}</span>
+                      <button @click="toggleNikShow(t.id)" class="text-slate-400 hover:text-indigo-600 transition-colors p-0.5" :title="revealedNikMap[t.id] ? 'Sembunyikan NIK' : 'Tampilkan NIK'">
+                        <svg v-if="revealedNikMap[t.id]" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.88 9.88a3 3 0 104.24 4.24m-1.41-5.65L18.36 18.36M1 1l22 22" />
+                        </svg>
+                        <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      </button>
+                    </div>
                     <span v-if="!t.pelanggan_status" class="text-[9px] text-red-500 font-semibold uppercase tracking-wider mt-0.5">⚠️ NIK Nonaktif</span>
                   </div>
                 </td>
@@ -637,6 +648,16 @@ const rpaSummary = computed(() => page.props.rpaSummary || { total: 0, sukses: 0
 const pangkalans = computed(() => page.props.pangkalans);
 const syncHistory = computed(() => page.props.syncHistory || []);
 
+const revealedNikMap = ref({});
+const toggleNikShow = (id) => {
+  revealedNikMap.value[id] = !revealedNikMap.value[id];
+};
+
+const maskNik = (nik) => {
+  if (!nik || nik.length < 12) return nik || '-';
+  return nik.substring(0, 6) + '******' + nik.substring(12);
+};
+
 // Carousel state
 const activeSlide = ref(0);
 const rpaSlides = computed(() => {
@@ -920,8 +941,8 @@ onMounted(() => {
   if (window.Echo && authUserId.value) {
     window.Echo.private(`rpa-progress.${authUserId.value}`)
       .listen('RpaProgressUpdated', (e) => {
-        // Otomatis refresh data (tabel dan card summary) tanpa reload halaman full
-        router.reload({ only: ['transaksis', 'rpaSummary', 'activeSync'], preserveScroll: true });
+        // Otomatis refresh data (tabel, card summary, activeSync, dan syncHistory) tanpa reload halaman full
+        router.reload({ only: ['transaksis', 'rpaSummary', 'activeSync', 'syncHistory'], preserveScroll: true });
 
         // 3. Tampilkan Notifikasi Desktop jika tugas Bot selesai atau gagal
         if (e.status === 'completed' || e.status === 'failed' || e.message?.toLowerCase().includes('selesai')) {
@@ -935,12 +956,18 @@ onMounted(() => {
           }
         }
       });
+      
+    window.Echo.private(`data-gas.${authUserId.value}`)
+      .listen('DataGasUpdated', (e) => {
+        router.reload({ only: ['transaksis', 'rpaSummary', 'syncHistory'], preserveScroll: true });
+      });
   }
 });
 
 onUnmounted(() => {
   if (window.Echo && authUserId.value) {
     window.Echo.leave(`rpa-progress.${authUserId.value}`);
+    window.Echo.leave(`data-gas.${authUserId.value}`);
   }
   pauseSlideShow();
 });

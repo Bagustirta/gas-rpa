@@ -83,15 +83,14 @@ class TransaksiGasController extends Controller
             ->limit(10)
             ->get()
             ->map(function ($sync) {
-                $summary = $sync->calculateSummary();
                 return [
                     'id' => $sync->id,
                     'status' => $sync->status,
                     'message' => $sync->message,
-                    'total_records' => $summary['total'],
-                    'success_records' => $summary['sukses'],
-                    'failed_records' => $summary['gagal'],
-                    'limit_records' => $summary['kuota_habis'],
+                    'total_records' => $sync->total_records,
+                    'success_records' => $sync->success_records,
+                    'failed_records' => $sync->failed_records,
+                    'limit_records' => (int) $sync->limit_records,
                     'created_at' => $sync->created_at->format('d M Y, H:i'),
                     'completed_at' => $sync->completed_at ? $sync->completed_at->format('d M Y, H:i') : null,
                 ];
@@ -222,6 +221,10 @@ class TransaksiGasController extends Controller
             'dilaporkan_pertamina' => false,
         ]);
 
+        try {
+            event(new \App\Events\DataGasUpdated($userId));
+        } catch (\Exception $e) {}
+
         return redirect()->route('transaksi-gas.index')->with('success', 'Transaksi berhasil ditambahkan.');
     }
 
@@ -289,6 +292,10 @@ class TransaksiGasController extends Controller
         }
 
         $transaksiGas->delete();
+
+        try {
+            event(new \App\Events\DataGasUpdated($userId));
+        } catch (\Exception $e) {}
 
         return redirect()->route('transaksi-gas.index')->with('success', 'Transaksi berhasil dihapus.');
     }
@@ -382,6 +389,18 @@ class TransaksiGasController extends Controller
             return redirect()->route('transaksi-gas.index')->with('error', 'Bot Audit Kuota sedang berjalan. Mohon tunggu hingga proses selesai.');
         }
 
+        // Set status langsung agar UI langsung merespon "Sedang berjalan"
+        \App\Models\AuditProgress::updateOrCreate(
+            ['user_id' => $userId],
+            [
+                'is_running' => true,
+                'step' => 'init',
+                'step_label' => 'Menginisiasi bot (Harap tunggu 10-15 detik)...',
+                'started_at' => now(),
+                'finished_at' => null
+            ]
+        );
+
         // Panggil Bot Audit secara otomatis di Windows
         // Gunakan VBScript + WScript.Shell agar CMD window terbuka meski PHP berjalan sebagai service
         if (str_contains(PHP_OS_FAMILY, 'Windows')) {
@@ -395,7 +414,9 @@ class TransaksiGasController extends Controller
             $logFile = str_replace('/', '\\', $logDir . '/audit_log_user_' . $userId . '.txt');
             
             // Perintah eksekusi Node.js beserta pengalihan log (menimpa log lama tiap kali run)
-            $cmd = "node check-quota.js --user-id {$userId} > \"{$logFile}\" 2>&1";
+            // ESCAPING PENTING: Karena dijalankan di dalam VBScript oShell.Run "...", 
+            // setiap tanda kutip di dalam string command harus ditulis dua kali ("")
+            $cmd = "node check-quota.js --user-id {$userId} > \"\"{$logFile}\"\" 2>&1";
             
             $vbs = sys_get_temp_dir() . '\\audit_run_' . $userId . '_' . time() . '.vbs';
             // VBScript: gunakan ""  (dua kutip) untuk escape quote di dalam string
@@ -606,9 +627,11 @@ class TransaksiGasController extends Controller
 
         if ($allocated < $totalTarget) {
             $sisa = $totalTarget - $allocated;
+            try { event(new \App\Events\DataGasUpdated(Auth::id())); } catch (\Exception $e) {}
             return redirect()->route('transaksi-gas.index')->with('success', "Distribusi selesai sebagian. Berhasil membuat {$createdCount} transaksi ({$allocated} tabung). Sisa {$sisa} tabung tidak teralokasikan.");
         }
 
+        try { event(new \App\Events\DataGasUpdated(Auth::id())); } catch (\Exception $e) {}
         return redirect()->route('transaksi-gas.index')->with('success', "Distribusi otomatis berhasil. Berhasil membuat {$createdCount} transaksi.");
     }
 }
