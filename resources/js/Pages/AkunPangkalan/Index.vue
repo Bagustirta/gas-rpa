@@ -94,62 +94,62 @@
             <form @submit.prevent="save" class="space-y-4">
               <!-- Nama Pangkalan -->
               <div>
-                <label for="modal-nama" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Nama Pangkalan</label>
+                <label for="modal-nama" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2">Nama Pangkalan</label>
                 <input
                   id="modal-nama"
                   v-model="form.nama_pangkalan"
                   type="text"
                   required
                   placeholder="Contoh: Pangkalan Gas Barokah"
-                  class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all duration-200"
-                  :class="{ 'border-red-500': form.errors.nama_pangkalan }"
+                  class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 font-medium placeholder-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm transition-all duration-200"
+                  :class="{ 'border-red-500 bg-red-50/10': form.errors.nama_pangkalan }"
                 />
                 <p v-if="form.errors.nama_pangkalan" class="text-xs text-red-500 mt-1 font-medium">{{ form.errors.nama_pangkalan }}</p>
               </div>
 
               <!-- Email / Telp -->
               <div>
-                <label for="modal-email" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Email / No. Telepon Portal</label>
+                <label for="modal-email" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2">Email / No. Telepon Portal Subsiditepat</label>
                 <input
                   id="modal-email"
                   v-model="form.email"
                   type="text"
                   required
                   placeholder="email@portal.com atau 0812xxxxxxxx"
-                  class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all duration-200"
-                  :class="{ 'border-red-500': form.errors.email }"
+                  class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 font-medium placeholder-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm transition-all duration-200"
+                  :class="{ 'border-red-500 bg-red-50/10': form.errors.email }"
                 />
                 <p v-if="form.errors.email" class="text-xs text-red-500 mt-1 font-medium">{{ form.errors.email }}</p>
               </div>
 
               <!-- Password -->
               <div>
-                <label for="modal-password" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Kata Sandi Portal</label>
+                <label for="modal-password" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2">Kata Sandi Portal Subsiditepat</label>
                 <input
                   id="modal-password"
                   v-model="form.password"
                   type="text"
                   required
-                  placeholder="Kata sandi portal subsiditepat"
-                  class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all duration-200"
-                  :class="{ 'border-red-500': form.errors.password }"
+                  placeholder="Kata sandi portal"
+                  class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 font-medium placeholder-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm transition-all duration-200"
+                  :class="{ 'border-red-500 bg-red-50/10': form.errors.password }"
                 />
                 <p v-if="form.errors.password" class="text-xs text-red-500 mt-1 font-medium">{{ form.errors.password }}</p>
               </div>
 
               <!-- Footer -->
-              <div class="flex justify-end space-x-3 pt-6 border-t border-slate-100 mt-6">
+              <div class="flex justify-end space-x-3 pt-6 border-t border-slate-200 mt-6">
                 <button
                   type="button"
                   @click="closeModal"
-                  class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 hover:text-slate-800 text-xs font-bold text-slate-600 transition-all duration-200"
+                  class="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-all duration-200"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   :disabled="form.processing"
-                  class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-xs text-white shadow-md active:scale-[0.98] transition-all duration-150 disabled:opacity-50"
+                  class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-xs text-white shadow-sm active:scale-[0.98] transition-all duration-150 disabled:opacity-50"
                 >
                   {{ form.processing ? 'Menyimpan...' : 'Simpan Akun' }}
                 </button>

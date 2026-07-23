@@ -180,11 +180,11 @@
       <LiveMonitoringWidget v-if="page.props.auditProgress" :initialData="page.props.auditProgress" class="mt-4" />
 
       <!-- Filters & Search Bar -->
-      <div class="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-center shadow-sm">
+      <div class="bg-white border border-slate-300 rounded-2xl p-4 md:p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-center shadow-sm">
         <!-- Search NIK -->
         <div class="relative w-full">
           <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </span>
@@ -193,7 +193,7 @@
             @input="debouncedSearch"
             type="text"
             placeholder="Cari NIK..."
-            class="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all duration-200"
+            class="w-full bg-slate-50 border border-slate-300 rounded-xl pl-10 pr-4 py-2 text-xs text-slate-900 font-medium placeholder-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm transition-all duration-200"
           />
         </div>
 
@@ -202,13 +202,14 @@
           <select
             v-model="filters.status_lapor"
             @change="applyFilters"
-            class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 focus:outline-none focus:border-indigo-500 transition-all duration-200"
+            class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-800 font-semibold focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm transition-all duration-200"
           >
             <option value="">Semua Status Lapor</option>
             <option value="belum_lapor">Belum Lapor</option>
             <option value="proses">Proses Antrean</option>
             <option value="sukses">Sukses Dilaporkan</option>
             <option value="kuota_habis">Limit Pertamina</option>
+            <option value="belum_17_tahun">Belum 17 Tahun</option>
             <option value="gagal">Gagal Dilaporkan</option>
           </select>
         </div>
@@ -218,7 +219,7 @@
           <select
             v-model="filters.akun_pangkalan_id"
             @change="applyFilters"
-            class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 focus:outline-none focus:border-indigo-500 transition-all duration-200"
+            class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-800 font-semibold focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm transition-all duration-200"
           >
             <option value="">Semua Pangkalan</option>
             <option v-for="p in pangkalans" :key="p.id" :value="p.id">
@@ -227,25 +228,121 @@
           </select>
         </div>
 
-        <!-- Filter Tanggal -->
-        <div class="relative w-full">
-          <input
-            v-model="filters.tanggal"
-            @change="applyFilters"
-            type="date"
-            class="w-full bg-white border border-slate-200 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-slate-700 focus:outline-none focus:border-indigo-500 transition-all duration-200"
-            title="Filter Tanggal Transaksi"
-          />
+        <!-- Filter Rentang Tanggal (Visual Calendar Grid Control) -->
+        <div class="relative w-full" ref="datePickerContainerRef">
           <button
-            v-if="filters.tanggal"
-            @click="clearTanggalFilter"
-            class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
-            title="Hapus filter tanggal"
+            type="button"
+            @click="toggleDatePicker"
+            class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-800 font-semibold focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm transition-all duration-200 flex items-center justify-between"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <div class="flex items-center space-x-2 truncate">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span class="truncate font-semibold">{{ dateRangeLabel }}</span>
+            </div>
+            <button
+              v-if="filters.tanggal_mulai || filters.tanggal_selesai"
+              @click.stop="clearDateRange"
+              class="text-slate-400 hover:text-slate-600 ml-1 p-0.5"
+              title="Hapus filter tanggal"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </button>
+
+          <!-- Calendar Popover (Sesuai Gambar) -->
+          <div 
+            v-if="showDatePicker" 
+            class="absolute right-0 mt-2 w-72 sm:w-80 bg-white border border-slate-200 rounded-2xl p-4 shadow-2xl z-50 space-y-3"
+          >
+            <!-- Month Header Navigation -->
+            <div class="flex items-center justify-between px-1">
+              <button 
+                type="button" 
+                @click="prevMonth" 
+                class="p-1 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+                title="Bulan sebelumnya"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+
+              <span class="text-xs font-bold text-slate-800">{{ calendarTitle }}</span>
+
+              <button 
+                type="button" 
+                @click="nextMonth" 
+                class="p-1 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+                title="Bulan selanjutnya"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Days of Week Header -->
+            <div class="grid grid-cols-7 text-center text-[11px] font-semibold text-slate-400 py-1">
+              <span>Sn</span>
+              <span>Sl</span>
+              <span>Rb</span>
+              <span>Km</span>
+              <span>Jm</span>
+              <span>Sb</span>
+              <span>Mg</span>
+            </div>
+
+            <!-- Calendar Days Grid -->
+            <div class="grid grid-cols-7 gap-y-1 text-center text-xs">
+              <button
+                v-for="(item, idx) in calendarDays"
+                :key="idx"
+                type="button"
+                @click="selectCalendarDate(item.dateStr)"
+                :disabled="!item.isCurrentMonth"
+                :class="[
+                  'h-8 w-full flex items-center justify-center text-xs font-semibold transition-all duration-150 relative',
+                  getDateClass(item)
+                ]"
+              >
+                {{ item.day }}
+              </button>
+            </div>
+
+            <!-- Preset & Actions Footer -->
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+              <div class="flex items-center space-x-1.5">
+                <button 
+                  type="button" 
+                  @click="setPresetRange('today')" 
+                  class="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-700 transition-colors"
+                >
+                  Hari Ini
+                </button>
+                <button 
+                  type="button" 
+                  @click="setPresetRange('thisMonth')" 
+                  class="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-700 transition-colors"
+                >
+                  Bulan Ini
+                </button>
+              </div>
+
+              <div class="flex items-center space-x-2">
+                <button 
+                  type="button" 
+                  @click="clearDateRange" 
+                  class="px-2.5 py-1 text-xs font-semibold rounded text-slate-500 hover:bg-slate-100"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -326,11 +423,12 @@
                       'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border',
                       t.status_lapor === 'sukses' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                       t.status_lapor === 'kuota_habis' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                      t.status_lapor === 'belum_17_tahun' ? 'bg-purple-50 text-purple-700 border-purple-200' :
                       t.status_lapor === 'gagal' ? 'bg-red-50 text-red-700 border-red-200' :
                       t.status_lapor === 'proses' ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse' :
                       'bg-slate-100 text-slate-500 border-slate-200'
                     ]">
-                      {{ t.status_lapor.replace('_', ' ') }}
+                      {{ t.status_lapor === 'belum_17_tahun' ? 'Belum 17 Thn' : t.status_lapor.replace('_', ' ') }}
                     </span>
                     <span v-if="t.catatan_lapor" class="text-[9px] text-slate-400 mt-1 max-w-[120px] truncate" :title="t.catatan_lapor">
                       {{ t.catatan_lapor }}
@@ -443,15 +541,15 @@
             <form @submit.prevent="submitDistribusi" class="space-y-4">
               <!-- Akun Pangkalan Select -->
               <div>
-                <label for="dist-pangkalan" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Akun Pangkalan</label>
+                <label for="dist-pangkalan" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2">Akun Pangkalan Target</label>
                 <select
                   id="dist-pangkalan"
                   v-model="distForm.akun_pangkalan_id"
                   required
-                  class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 focus:outline-none focus:border-indigo-500 transition-all duration-200"
-                  :class="{ 'border-red-500': distForm.errors.akun_pangkalan_id }"
+                  class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm transition-all duration-200"
+                  :class="{ 'border-red-500 bg-red-50/10': distForm.errors.akun_pangkalan_id }"
                 >
-                  <option value="">Pilih Pangkalan...</option>
+                  <option value="">Pilih Akun Pangkalan...</option>
                   <option v-for="p in pangkalans" :key="p.id" :value="p.id">
                     {{ p.nama_pangkalan }}
                   </option>
@@ -461,49 +559,49 @@
 
               <!-- Total Tabung -->
               <div>
-                <label for="dist-total" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Total Tabung yang Diterima</label>
+                <label for="dist-total" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2">Total Tabung Diterima</label>
                 <input
                   id="dist-total"
                   v-model.number="distForm.total_tabung"
                   type="number"
                   min="1"
                   required
-                  placeholder="Masukkan jumlah tabung..."
-                  class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all duration-200"
-                  :class="{ 'border-red-500': distForm.errors.total_tabung }"
+                  placeholder="Contoh: 50"
+                  class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 font-medium placeholder-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm transition-all duration-200"
+                  :class="{ 'border-red-500 bg-red-50/10': distForm.errors.total_tabung }"
                 />
                 <p v-if="distForm.errors.total_tabung" class="text-xs text-red-500 mt-1 font-medium">{{ distForm.errors.total_tabung }}</p>
-                <p class="text-[10px] text-slate-400 mt-1 font-medium leading-relaxed">Sistem akan mengalokasikan tabung ini ke pelanggan secara otomatis berdasarkan sisa kuota mereka.</p>
+                <p class="text-[11px] text-slate-500 mt-1 font-normal leading-relaxed">Sistem akan mengalokasikan tabung ini ke pelanggan secara otomatis berdasarkan sisa kuota mereka.</p>
               </div>
 
               <!-- Tanggal Transaksi -->
               <div>
-                <label for="dist-tanggal" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Tanggal Transaksi</label>
+                <label for="dist-tanggal" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2">Tanggal Transaksi</label>
                 <input
                   id="dist-tanggal"
                   v-model="distForm.tanggal_transaksi"
                   type="date"
                   required
-                  class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 transition-all duration-200"
-                  :class="{ 'border-red-500': distForm.errors.tanggal_transaksi }"
+                  class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm transition-all duration-200"
+                  :class="{ 'border-red-500 bg-red-50/10': distForm.errors.tanggal_transaksi }"
                 />
                 <p v-if="distForm.errors.tanggal_transaksi" class="text-xs text-red-500 mt-1 font-medium">{{ distForm.errors.tanggal_transaksi }}</p>
-                <p class="text-[10px] text-slate-400 mt-1 font-medium leading-relaxed">Transaksi akan diutamakan pada minggu dari tanggal ini, lalu didistribusikan ke minggu lain pada bulan yang sama jika kuota minggu ini habis.</p>
+                <p class="text-[11px] text-slate-500 mt-1 font-normal leading-relaxed">Transaksi akan diutamakan pada minggu dari tanggal ini, lalu didistribusikan ke minggu lain pada bulan yang sama jika kuota minggu ini habis.</p>
               </div>
 
               <!-- Footer -->
-              <div class="flex justify-end space-x-3 pt-6 border-t border-slate-100 mt-6">
+              <div class="flex justify-end space-x-3 pt-6 border-t border-slate-200 mt-6">
                 <button
                   type="button"
                   @click="showDistModal = false"
-                  class="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 hover:text-slate-800 text-xs font-bold text-slate-600 transition-all duration-200"
+                  class="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-all duration-200"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   :disabled="distForm.processing"
-                  class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold text-xs text-white shadow-md active:scale-[0.98] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold text-xs text-white shadow-sm active:scale-[0.98] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {{ distForm.processing ? 'Memproses...' : 'Mulai Distribusi' }}
                 </button>
@@ -746,7 +844,8 @@ const filters = reactive({
   search: page.props.filters?.search || '',
   status_lapor: page.props.filters?.status_lapor || '',
   akun_pangkalan_id: page.props.filters?.akun_pangkalan_id || '',
-  tanggal: page.props.filters?.tanggal || '',
+  tanggal_mulai: page.props.filters?.tanggal_mulai || '',
+  tanggal_selesai: page.props.filters?.tanggal_selesai || '',
 });
 
 // Current filters for building page URLs
@@ -754,7 +853,8 @@ const currentFilters = computed(() => ({
   search: filters.search,
   status_lapor: filters.status_lapor,
   akun_pangkalan_id: filters.akun_pangkalan_id,
-  tanggal: filters.tanggal,
+  tanggal_mulai: filters.tanggal_mulai,
+  tanggal_selesai: filters.tanggal_selesai,
 }));
 
 // Full windowed pagination — always shows 5 pages in the window
@@ -806,10 +906,225 @@ const toggleSelectAll = () => {
   }
 };
 
-const clearTanggalFilter = () => {
-  filters.tanggal = '';
+// Visual Calendar Range Picker Logic
+const showDatePicker = ref(false);
+const datePickerContainerRef = ref(null);
+const tempStart = ref(filters.tanggal_mulai);
+const tempEnd = ref(filters.tanggal_selesai);
+
+const initialDateObj = filters.tanggal_mulai ? new Date(filters.tanggal_mulai) : new Date();
+const calendarMonth = ref(isNaN(initialDateObj) ? new Date().getMonth() : initialDateObj.getMonth());
+const calendarYear = ref(isNaN(initialDateObj) ? new Date().getFullYear() : initialDateObj.getFullYear());
+
+const monthNamesIndo = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+];
+
+const calendarTitle = computed(() => {
+  return `${monthNamesIndo[calendarMonth.value]} ${calendarYear.value}`;
+});
+
+const prevMonth = () => {
+  if (calendarMonth.value === 0) {
+    calendarMonth.value = 11;
+    calendarYear.value--;
+  } else {
+    calendarMonth.value--;
+  }
+};
+
+const nextMonth = () => {
+  if (calendarMonth.value === 11) {
+    calendarMonth.value = 0;
+    calendarYear.value++;
+  } else {
+    calendarMonth.value++;
+  }
+};
+
+const padNum = (n) => String(n).padStart(2, '0');
+
+const calendarDays = computed(() => {
+  const year = calendarYear.value;
+  const month = calendarMonth.value;
+
+  const firstDayObj = new Date(year, month, 1);
+  let dayOfWeek = firstDayObj.getDay(); 
+  // Senin = 0, Selasa = 1, ..., Minggu = 6
+  let startingIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+  const days = [];
+
+  // Prev month padding
+  for (let i = startingIndex - 1; i >= 0; i--) {
+    const dayNum = daysInPrevMonth - i;
+    const pMonth = month === 0 ? 11 : month - 1;
+    const pYear = month === 0 ? year - 1 : year;
+    days.push({
+      day: dayNum,
+      dateStr: `${pYear}-${padNum(pMonth + 1)}-${padNum(dayNum)}`,
+      isCurrentMonth: false,
+    });
+  }
+
+  // Current month
+  for (let d = 1; d <= daysInMonth; d++) {
+    days.push({
+      day: d,
+      dateStr: `${year}-${padNum(month + 1)}-${padNum(d)}`,
+      isCurrentMonth: true,
+    });
+  }
+
+  // Next month padding to 35 or 42
+  const totalSoFar = days.length;
+  const targetTotal = totalSoFar > 35 ? 42 : 35;
+  for (let i = 1; i <= targetTotal - totalSoFar; i++) {
+    const nMonth = month === 11 ? 0 : month + 1;
+    const nYear = month === 11 ? year + 1 : year;
+    days.push({
+      day: i,
+      dateStr: `${nYear}-${padNum(nMonth + 1)}-${padNum(i)}`,
+      isCurrentMonth: false,
+    });
+  }
+
+  return days;
+});
+
+const selectCalendarDate = (dateStr) => {
+  if (!dateStr) return;
+
+  if (!tempStart.value || (tempStart.value && tempEnd.value)) {
+    tempStart.value = dateStr;
+    tempEnd.value = null;
+  } else if (tempStart.value && !tempEnd.value) {
+    if (dateStr < tempStart.value) {
+      tempEnd.value = tempStart.value;
+      tempStart.value = dateStr;
+    } else {
+      tempEnd.value = dateStr;
+    }
+    // Langsung terapkan filter ketika rentang selesai dipilih!
+    filters.tanggal_mulai = tempStart.value;
+    filters.tanggal_selesai = tempEnd.value;
+    showDatePicker.value = false;
+    applyFilters();
+  }
+};
+
+const getDateClass = (item) => {
+  if (!item || !item.isCurrentMonth) return 'text-slate-300 opacity-40 cursor-not-allowed';
+
+  const isStart = tempStart.value === item.dateStr;
+  const isEnd = tempEnd.value === item.dateStr;
+  const inRange = tempStart.value && tempEnd.value && item.dateStr > tempStart.value && item.dateStr < tempEnd.value;
+  const isSunday = item.dateStr ? new Date(item.dateStr).getDay() === 0 : false;
+
+  if (isStart && isEnd) {
+    return 'bg-blue-600 !text-white font-bold rounded-xl shadow-sm z-10';
+  }
+  if (isStart && tempEnd.value) {
+    return 'bg-blue-600 !text-white font-bold rounded-l-xl rounded-r-none shadow-sm z-10';
+  }
+  if (isEnd && tempStart.value) {
+    return 'bg-blue-600 !text-white font-bold rounded-r-xl rounded-l-none shadow-sm z-10';
+  }
+  if (isStart || isEnd) {
+    return 'bg-blue-600 !text-white font-bold rounded-xl shadow-sm z-10';
+  }
+  if (inRange) {
+    return 'bg-blue-50 text-blue-950 font-semibold rounded-none';
+  }
+  if (isSunday) {
+    return 'text-red-500 font-semibold hover:bg-red-50 cursor-pointer rounded-xl';
+  }
+  return 'hover:bg-blue-50 hover:text-blue-600 text-slate-800 cursor-pointer rounded-xl';
+};
+
+const formatDateDisplay = (dateStr) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    const year = parts[0];
+    const month = months[parseInt(parts[1], 10) - 1] || parts[1];
+    const day = parts[2];
+    return `${day} ${month} ${year}`;
+  }
+  return dateStr;
+};
+
+const dateRangeLabel = computed(() => {
+  if (filters.tanggal_mulai && filters.tanggal_selesai) {
+    return `${formatDateDisplay(filters.tanggal_mulai)} – ${formatDateDisplay(filters.tanggal_selesai)}`;
+  }
+  if (filters.tanggal_mulai) {
+    return `Dari ${formatDateDisplay(filters.tanggal_mulai)}`;
+  }
+  if (filters.tanggal_selesai) {
+    return `s/d ${formatDateDisplay(filters.tanggal_selesai)}`;
+  }
+  return 'Atur Rentang Waktu';
+});
+
+const toggleDatePicker = () => {
+  tempStart.value = filters.tanggal_mulai;
+  tempEnd.value = filters.tanggal_selesai;
+  showDatePicker.value = !showDatePicker.value;
+};
+
+const setPresetRange = (type) => {
+  const now = new Date();
+  const formatYMD = (d) => `${d.getFullYear()}-${padNum(d.getMonth() + 1)}-${padNum(d.getDate())}`;
+
+  let start = '';
+  let end = '';
+
+  if (type === 'today') {
+    start = formatYMD(now);
+    end = start;
+  } else if (type === 'thisMonth') {
+    const s = new Date(now.getFullYear(), now.getMonth(), 1);
+    const e = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    start = formatYMD(s);
+    end = formatYMD(e);
+  }
+
+  tempStart.value = start;
+  tempEnd.value = end;
+  filters.tanggal_mulai = start;
+  filters.tanggal_selesai = end;
+  showDatePicker.value = false;
   applyFilters();
 };
+
+const clearDateRange = () => {
+  filters.tanggal_mulai = '';
+  filters.tanggal_selesai = '';
+  tempStart.value = null;
+  tempEnd.value = null;
+  showDatePicker.value = false;
+  applyFilters();
+};
+
+const handleOutsideClick = (e) => {
+  if (datePickerContainerRef.value && !datePickerContainerRef.value.contains(e.target)) {
+    showDatePicker.value = false;
+  }
+};
+
+onMounted(() => {
+  document.addEventListener('click', handleOutsideClick);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleOutsideClick);
+});
 
 let searchTimeout = null;
 const debouncedSearch = () => {
@@ -824,7 +1139,8 @@ const applyFilters = () => {
     search: filters.search,
     status_lapor: filters.status_lapor,
     akun_pangkalan_id: filters.akun_pangkalan_id,
-    tanggal: filters.tanggal,
+    tanggal_mulai: filters.tanggal_mulai,
+    tanggal_selesai: filters.tanggal_selesai,
   }, {
     preserveState: true,
     replace: true,

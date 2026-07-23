@@ -205,33 +205,33 @@
             <form @submit.prevent="save" class="space-y-5">
               <!-- NIK -->
               <div>
-                <label for="modal-nik" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Nomor Induk Kependudukan (NIK)</label>
+                <label for="modal-nik" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2">Nomor Induk Kependudukan (NIK)</label>
                 <input
                   id="modal-nik"
                   v-model="form.nik"
                   type="text"
                   required
                   maxlength="16"
-                  placeholder="Ketik 16 digit NIK..."
-                  class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono tracking-wider transition-all duration-200"
-                  :class="{ 'border-red-500': form.errors.nik }"
+                  placeholder="Masukkan 16 digit NIK..."
+                  class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 font-semibold placeholder-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 font-mono tracking-wider shadow-sm transition-all duration-200"
+                  :class="{ 'border-red-500 bg-red-50/10': form.errors.nik }"
                 />
                 <p v-if="form.errors.nik" class="text-xs text-red-500 mt-1 font-medium">{{ form.errors.nik }}</p>
-                <p class="text-[10px] text-slate-400 mt-1 font-semibold">Sisa karakter: {{ 16 - (form.nik ? form.nik.length : 0) }} digit</p>
+                <p class="text-[11px] text-slate-500 mt-1 font-normal">Sisa karakter: {{ 16 - (form.nik ? form.nik.length : 0) }} digit</p>
               </div>
 
               <!-- Status -->
-              <div class="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Status Aktif</span>
+              <div class="flex items-center justify-between bg-slate-50 p-3.5 rounded-xl border border-slate-300">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-700">Status Pelanggan Aktif</span>
                 <input
                   v-model="form.status"
                   type="checkbox"
-                  class="w-4 h-4 rounded border-slate-350 text-indigo-650 focus:ring-indigo-500"
+                  class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                 />
               </div>
 
               <!-- Footer -->
-              <div class="flex justify-end space-x-3 pt-6 border-t border-slate-100">
+              <div class="flex justify-end space-x-3 pt-6 border-t border-slate-200">
                 <button
                   type="button"
                   @click="showModal = false"

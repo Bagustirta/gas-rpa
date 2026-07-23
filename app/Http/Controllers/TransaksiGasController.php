@@ -35,7 +35,16 @@ class TransaksiGasController extends Controller
             $query->where('akun_pangkalan_id', $request->akun_pangkalan_id);
         }
 
-        if ($request->filled('tanggal')) {
+        if ($request->filled('tanggal_mulai') && $request->filled('tanggal_selesai')) {
+            $query->whereBetween('tanggal_transaksi', [
+                Carbon::parse($request->tanggal_mulai)->startOfDay(),
+                Carbon::parse($request->tanggal_selesai)->endOfDay()
+            ]);
+        } elseif ($request->filled('tanggal_mulai')) {
+            $query->whereDate('tanggal_transaksi', '>=', $request->tanggal_mulai);
+        } elseif ($request->filled('tanggal_selesai')) {
+            $query->whereDate('tanggal_transaksi', '<=', $request->tanggal_selesai);
+        } elseif ($request->filled('tanggal')) {
             $query->whereDate('tanggal_transaksi', $request->tanggal);
         }
 
@@ -136,7 +145,7 @@ class TransaksiGasController extends Controller
         return Inertia::render('TransaksiGas/Index', [
             'transaksis' => $transaksis,
             'pangkalans' => $pangkalans,
-            'filters' => $request->only(['search', 'status_lapor', 'akun_pangkalan_id', 'tanggal']),
+            'filters' => $request->only(['search', 'status_lapor', 'akun_pangkalan_id', 'tanggal', 'tanggal_mulai', 'tanggal_selesai']),
             'activeSync' => $activeSync,
             'activeAudit' => $activeAudit,
             'auditProgress' => $auditProgressData,

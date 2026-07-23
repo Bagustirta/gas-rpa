@@ -42,7 +42,7 @@ class RpaSync extends Model
             ->where(function($q) use ($startedAt) {
                 $q->where('status_lapor', 'belum_lapor')
                   ->orWhere(function($sub) use ($startedAt) {
-                      $sub->whereIn('status_lapor', ['sukses', 'kuota_habis', 'gagal', 'proses'])
+                      $sub->whereIn('status_lapor', ['sukses', 'kuota_habis', 'gagal', 'belum_17_tahun', 'proses'])
                           ->where('updated_at', '>=', $startedAt);
                   });
             })
@@ -75,7 +75,7 @@ class RpaSync extends Model
             
             if ($t->status_lapor === 'sukses') { $breakdowns[$pangkalanId]['sukses']++; $globalSukses++; }
             elseif ($t->status_lapor === 'kuota_habis') { $breakdowns[$pangkalanId]['kuota_habis']++; $globalKuotaHabis++; }
-            elseif ($t->status_lapor === 'gagal') { $breakdowns[$pangkalanId]['gagal']++; $globalGagal++; }
+            elseif ($t->status_lapor === 'gagal' || $t->status_lapor === 'belum_17_tahun') { $breakdowns[$pangkalanId]['gagal']++; $globalGagal++; }
             else { $breakdowns[$pangkalanId]['belum_lapor']++; $globalBelumLapor++; } // termasuk 'belum_lapor' atau 'proses'
         }
 

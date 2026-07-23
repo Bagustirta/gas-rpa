@@ -468,16 +468,26 @@ class ApiLpgController extends Controller
             'message' => ['required', 'string'],
         ]);
 
-        $transaksi->update([
-            'status_lapor'         => 'gagal',
-            'catatan_lapor'        => $data['message'],
-            'dilaporkan_pertamina' => false,
-        ]);
-
-        // Nonaktifkan pelanggan secara otomatis jika error berkaitan dengan NIK tidak valid atau meninggal
         $msgLower = strtolower($data['message']);
+
+        // Jika error berkaitan dengan NIK belum 17 tahun, set status_lapor = 'belum_17_tahun'
+        // dan JANGAN nonaktifkan pelanggan agar bisa dicoba otomatis tahun depan saat usianya sudah genap 17 tahun.
+        if (str_contains($msgLower, 'belum 17 tahun') || str_contains($msgLower, 'belum berusia 17')) {
+            $transaksi->update([
+                'status_lapor'         => 'belum_17_tahun',
+                'catatan_lapor'        => 'Ditangguhkan: NIK belum berusia 17 tahun (Dicoba lagi tahun depan)',
+                'dilaporkan_pertamina' => false,
+            ]);
+        } else {
+            $transaksi->update([
+                'status_lapor'         => 'gagal',
+                'catatan_lapor'        => $data['message'],
+                'dilaporkan_pertamina' => false,
+            ]);
+        }
+
+        // Nonaktifkan pelanggan secara otomatis hanya jika NIK tidak valid, tidak terdaftar, meninggal, atau masalah NIB
         if (
-            str_contains($msgLower, 'belum 17 tahun') || 
             str_contains($msgLower, 'tidak terdaftar') || 
             str_contains($msgLower, 'nik salah') || 
             str_contains($msgLower, 'nik tidak ditemukan') ||
