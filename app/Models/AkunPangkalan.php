@@ -22,6 +22,10 @@ class AkunPangkalan extends Model
         'password' => 'encrypted', // Enkripsi Otomatis Laravel Level 2
     ];
 
+    protected $hidden = [
+        'password',
+    ];
+
     protected static function booted()
     {
         static::creating(function ($model) {

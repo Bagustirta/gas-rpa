@@ -14,7 +14,7 @@ class UserController extends Controller
     {
         // Hanya super_admin yang bisa akses ini (nanti di middleware / web.php)
         $users = User::withCount('akunPangkalans')->latest()->get();
-        return Inertia::render('Users/Index', [
+        return inertia(implode('/', ['Users', 'Index']), [
             'users' => $users
         ]);
     }
@@ -25,9 +25,14 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
-            'role' => 'required|in:super_admin,agen',
+            'role' => 'required|in:agen',
             'is_active' => 'boolean',
         ]);
+
+        // Cek Keamanan Ekstra: Pembuatan Super Admin dinonaktifkan total dari antarmuka Web.
+        if ($request->role === 'super_admin') {
+            return redirect()->back()->with('error', 'Pembuatan Super Admin dinonaktifkan dari web untuk keamanan. Silakan ubah manual di Database.');
+        }
 
         User::create([
             'name' => $request->name,
@@ -45,7 +50,7 @@ class UserController extends Controller
         $rules = [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
-            'role' => 'required|in:super_admin,agen',
+            'role' => 'required|in:agen',
             'is_active' => 'boolean',
             'subscription_status' => 'required|in:trial,aktif,non-aktif',
             'subscription_expired_at' => 'nullable|date',
@@ -57,6 +62,16 @@ class UserController extends Controller
         }
 
         $validated = $request->validate($rules);
+
+        // Cek Keamanan Ekstra: Pengangkatan Super Admin dinonaktifkan total dari antarmuka Web.
+        if ($request->role === 'super_admin' && $user->role !== 'super_admin') {
+            return redirect()->back()->with('error', 'Pengangkatan Super Admin dinonaktifkan dari web untuk keamanan. Silakan ubah manual di Database.');
+        }
+
+        // Cek Keamanan: Tidak boleh merubah role Super Admin (Demosi) selain oleh dirinya sendiri
+        if ($user->role === 'super_admin' && $validated['role'] !== 'super_admin' && \Illuminate\Support\Facades\Auth::id() !== $user->id) {
+            return redirect()->back()->with('error', 'Tidak diizinkan menurunkan jabatan Super Admin.');
+        }
 
         $user->name = $validated['name'];
         $user->email = $validated['email'];
@@ -77,7 +92,7 @@ class UserController extends Controller
 
     public function destroy(User $user)
     {
-        if ($user->id === auth()->id() || $user->isSuperAdmin()) {
+        if ($user->id === \Illuminate\Support\Facades\Auth::id() || $user->isSuperAdmin()) {
             return redirect()->back()->with('error', 'Tidak dapat menghapus akun ini.');
         }
 

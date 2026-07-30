@@ -69,4 +69,62 @@ class SuperAdminController extends Controller
             'recentTransactions' => $recentTransactions
         ]);
     }
+
+    public function logs(Request $request)
+    {
+        $query = \App\Models\ActivityLog::with('user:id,name,email')->latest();
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('action', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%")
+                  ->orWhereHas('user', function($uq) use ($search) {
+                      $uq->where('name', 'like', "%{$search}%")
+                         ->orWhere('email', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        $logs = $query->paginate(20)->withQueryString()->through(fn($log) => [
+            'id' => $log->id,
+            'user' => $log->user ? $log->user->name . ' (' . $log->user->email . ')' : 'System / Guest',
+            'action' => $log->action,
+            'description' => $log->description,
+            'ip_address' => $log->ip_address,
+            'latitude' => $log->latitude,
+            'longitude' => $log->longitude,
+            'user_agent' => $log->user_agent,
+            'created_at' => $log->created_at->format('Y-m-d H:i:s'),
+            'time_ago' => $log->created_at->diffForHumans(),
+        ]);
+
+        return inertia(implode('/', ['SuperAdmin', 'Logs']), [
+            'logs' => $logs,
+            'filters' => $request->only('search'),
+        ]);
+    }
+
+    public function getLocation(string $ip)
+    {
+        if (!$ip || $ip === '127.0.0.1' || $ip === '::1' || str_starts_with($ip, '192.168.')) {
+            return response()->json(['error' => 'IP Lokal'], 400);
+        }
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::timeout(5)->get("http://ip-api.com/json/{$ip}");
+            
+            if ($response->successful() && $response->json('status') === 'success') {
+                return response()->json([
+                    'city' => $response->json('city'),
+                    'regionName' => $response->json('regionName'),
+                    'country' => $response->json('country'),
+                ]);
+            }
+            
+            return response()->json(['error' => 'Lokasi tidak ditemukan'], 404);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Gagal menghubungi server pelacakan'], 500);
+        }
+    }
 }

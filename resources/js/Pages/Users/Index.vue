@@ -176,7 +176,6 @@
                   class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 transition-all duration-200"
                 >
                   <option value="agen">Agen Biasa</option>
-                  <option value="super_admin">Super Admin</option>
                 </select>
                 <div v-if="form.errors.role" class="mt-1 text-xs text-red-500">{{ form.errors.role }}</div>
               </div>

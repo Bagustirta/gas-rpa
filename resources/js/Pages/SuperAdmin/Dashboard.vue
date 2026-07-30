@@ -4,9 +4,11 @@
 
     <div class="space-y-6">
       <!-- Header Section -->
-      <div>
-        <h2 class="text-2xl font-black text-slate-800 tracking-tight">Monitor Server & Aplikasi</h2>
-        <p class="text-sm text-slate-500 mt-1">Ringkasan lalu lintas dan statistik penggunaan keseluruhan sistem.</p>
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-black text-slate-800 tracking-tight">Monitor Server & Aplikasi</h2>
+          <p class="text-sm text-slate-500 mt-1">Ringkasan lalu lintas dan statistik penggunaan keseluruhan sistem.</p>
+        </div>
       </div>
 
       <!-- Stats Grid -->
@@ -194,7 +196,7 @@
 </template>
 
 <script setup>
-import { Head } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '../../Layouts/AppLayout.vue';
 
 defineProps({

@@ -103,28 +103,26 @@
             <span class="text-[10px] font-bold bg-emerald-200 text-emerald-700 px-2 py-0.5 rounded-full">{{ subscriptionDaysRemaining }} Hari</span>
           </div>
           
-          <!-- Upgrade via Billing Page Button -->
-          <Link v-if="$page.props.auth.user?.subscription_status !== 'aktif'" 
-             :href="route('billing')" 
-             class="mb-3 w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold shadow-sm transition-all duration-200">
+          <!-- Upgrade/Extend via Billing Page Button -->
+          <Link :href="route('billing')" 
+             class="mb-3 w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-xl text-white text-xs font-bold shadow-sm transition-all duration-200"
+             :class="$page.props.auth.user?.subscription_status === 'aktif' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-emerald-500 hover:bg-emerald-600'">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            <span>Tingkatkan Akun</span>
+            <span>{{ $page.props.auth.user?.subscription_status === 'aktif' ? 'Perpanjang Premium' : 'Tingkatkan Akun' }}</span>
           </Link>
         </div>
 
-        <Link
-          :href="route('logout')"
-          method="post"
-          as="button"
+        <button
+          @click="handleLogout"
           class="w-full flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-xs font-semibold text-slate-600 shadow-sm transition-all duration-200"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
           </svg>
           <span>Keluar Aplikasi</span>
-        </Link>
+        </button>
       </div>
     </aside>
 
@@ -194,8 +192,9 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
-import { Link, usePage } from '@inertiajs/vue3';
+import { ref, computed, watch, onMounted } from 'vue';
+import { Link, usePage, router } from '@inertiajs/vue3';
+import axios from 'axios';
 
 // Icon Components
 const DashboardIcon = {
@@ -218,6 +217,10 @@ const BookIcon = {
   template: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>`
 };
 
+const LogIcon = {
+  template: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>`
+};
+
 const isMobileMenuOpen = ref(false);
 const page = usePage();
 
@@ -228,7 +231,7 @@ const navLinks = computed(() => {
     return [
       { route: 'superadmin.dashboard', label: 'Monitor Server', icon: DashboardIcon },
       { route: 'users.index', label: 'Manajemen Agen', icon: UsersIcon },
-      // Placeholder for CRUD Role / Status routes that will be added
+      { route: 'superadmin.logs', label: 'Log Aktivitas', icon: LogIcon },
     ];
   }
 
@@ -297,6 +300,71 @@ const showToast = (message, type = 'success') => {
     toast.value.show = false;
   }, 4000);
 };
+
+// Push Notification Logic
+const urlBase64ToUint8Array = (base64String) => {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+};
+
+const registerServiceWorker = async () => {
+  if ('serviceWorker' in navigator && 'PushManager' in window) {
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      const vapidPublicKey = page.props.vapid_public_key;
+      if (vapidPublicKey) {
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+          });
+        }
+        await axios.post(route('push.subscribe'), subscription);
+      }
+    } catch (e) {
+      console.error('ServiceWorker registration failed', e);
+    }
+  }
+};
+
+const handleLogout = async () => {
+  if ('serviceWorker' in navigator && 'PushManager' in window) {
+    try {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration) {
+        const subscription = await registration.pushManager.getSubscription();
+        if (subscription) {
+          await axios.post(route('push.unsubscribe'), { endpoint: subscription.endpoint });
+          await subscription.unsubscribe();
+        }
+      }
+    } catch (e) {
+      console.error('Unsubscribe failed', e);
+    }
+  }
+  router.post(route('logout'));
+};
+
+onMounted(() => {
+  if (page.props.auth?.user) {
+    if ("Notification" in window) {
+      if (Notification.permission === "default") {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') registerServiceWorker();
+        });
+      } else if (Notification.permission === "granted") {
+        registerServiceWorker();
+      }
+    }
+  }
+});
 </script>
 
 <style scoped>

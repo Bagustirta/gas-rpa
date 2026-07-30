@@ -8,81 +8,100 @@
       </div>
 
       <!-- Stats Grid -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
         <!-- Card 1: Pelanggan Aktif -->
         <div class="bg-white border border-slate-200 rounded-2xl p-6 relative overflow-hidden group hover:shadow-md hover:border-slate-300 transition-all duration-300 shadow-sm">
           <div class="absolute -right-4 -bottom-4 text-emerald-500/10 group-hover:scale-110 transition-transform duration-300">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-32 h-32" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
             </svg>
           </div>
           <div class="flex items-center justify-between mb-4">
-            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Pelanggan Aktif</span>
+            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Pelanggan Aktif</span>
             <div class="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
               </svg>
             </div>
           </div>
           <h2 class="text-3xl font-black text-slate-900 tracking-tight">{{ stats.totalPelanggan }}</h2>
-          <p class="text-xs text-slate-500 mt-2">Pelanggan bersubsidi terdaftar</p>
+          <p class="text-[11px] text-slate-500 mt-2">Subsidi terdaftar</p>
         </div>
 
         <!-- Card 2: Tabung Terjual -->
         <div class="bg-white border border-slate-200 rounded-2xl p-6 relative overflow-hidden group hover:shadow-md hover:border-slate-300 transition-all duration-300 shadow-sm">
           <div class="absolute -right-4 -bottom-4 text-indigo-500/10 group-hover:scale-110 transition-transform duration-300">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-32 h-32" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           </div>
           <div class="flex items-center justify-between mb-4">
-            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Tabung Terjual Bulan Ini</span>
+            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Tabung Terjual</span>
             <div class="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
             </div>
           </div>
           <h2 class="text-3xl font-black text-slate-900 tracking-tight">{{ stats.tabungBulanIni }} <span class="text-sm font-semibold text-slate-400">tabung</span></h2>
-          <p class="text-xs text-slate-500 mt-2">Hari ini: {{ stats.transaksiHariIni }} transaksi</p>
+          <p class="text-[11px] text-slate-500 mt-2">Bulan ini</p>
         </div>
 
         <!-- Card 3: NIK Kuota Habis -->
         <div class="bg-white border border-slate-200 rounded-2xl p-6 relative overflow-hidden group hover:shadow-md hover:border-slate-300 transition-all duration-300 shadow-sm">
           <div class="absolute -right-4 -bottom-4 text-orange-500/10 group-hover:scale-110 transition-transform duration-300">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-32 h-32" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016zM12 9v2m0 4h.01" />
             </svg>
           </div>
           <div class="flex items-center justify-between mb-4">
-            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">NIK Kuota Habis</span>
+            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Kuota Habis</span>
             <div class="w-10 h-10 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016zM12 9v2m0 4h.01" />
+              </svg>
+            </div>
+          </div>
+          <h2 class="text-3xl font-black text-slate-900 tracking-tight">{{ stats.kuotaHabis }} <span class="text-sm font-semibold text-slate-400">NIK</span></h2>
+          <p class="text-[11px] text-slate-500 mt-2">Capai 4 tabung/bulan</p>
+        </div>
+
+        <!-- Card 4: Kuota Limit -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-6 relative overflow-hidden group hover:shadow-md hover:border-slate-300 transition-all duration-300 shadow-sm">
+          <div class="absolute -right-4 -bottom-4 text-red-500/10 group-hover:scale-110 transition-transform duration-300">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-32 h-32" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div class="flex items-center justify-between mb-4">
+            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Kuota Limit</span>
+            <div class="w-10 h-10 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center text-red-600">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
           </div>
-          <h2 class="text-3xl font-black text-slate-900 tracking-tight">{{ stats.kuotaHabis }} <span class="text-sm font-semibold text-slate-400">NIK</span></h2>
-          <p class="text-xs text-slate-500 mt-2">Sudah capai 4 tabung bulan ini</p>
+          <h2 class="text-3xl font-black text-slate-900 tracking-tight">{{ stats.transaksiLimit }}</h2>
+          <p class="text-[11px] text-slate-500 mt-2">Ditolak MyPertamina</p>
         </div>
 
-        <!-- Card 4: Belum Lapor -->
+        <!-- Card 5: Belum Lapor -->
         <div class="bg-white border border-slate-200 rounded-2xl p-6 relative overflow-hidden group hover:shadow-md hover:border-slate-300 transition-all duration-300 shadow-sm">
           <div class="absolute -right-4 -bottom-4 text-amber-500/10 group-hover:scale-110 transition-transform duration-300">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-32 h-32" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
           </div>
           <div class="flex items-center justify-between mb-4">
-            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Belum Lapor ke MAP</span>
+            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Belum Lapor</span>
             <div class="w-10 h-10 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
             </div>
           </div>
-          <h2 class="text-3xl font-black text-slate-900 tracking-tight">{{ stats.belumDilaporkan }} <span class="text-sm font-semibold text-slate-400">transaksi</span></h2>
-          <p class="text-xs text-slate-500 mt-2">Perlu disinkronkan ke MyPertamina</p>
+          <h2 class="text-3xl font-black text-slate-900 tracking-tight">{{ stats.belumDilaporkan }} <span class="text-sm font-semibold text-slate-400">trx</span></h2>
+          <p class="text-[11px] text-slate-500 mt-2">Perlu disinkronkan</p>
         </div>
       </div>
 
@@ -143,7 +162,7 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 text-sm">
-              <tr v-for="item in customersQuota.data" :key="item.id" class="hover:bg-slate-50/70 transition-all duration-150">
+              <tr v-for="item in localCustomersQuota" :key="item.id" class="hover:bg-slate-50/70 transition-all duration-150">
                 <!-- NIK -->
                 <td class="py-3.5 px-4 font-mono text-slate-700 tracking-wider">
                   <div class="flex items-center space-x-2">
@@ -191,7 +210,7 @@
                   </div>
                 </td>
               </tr>
-              <tr v-if="customersQuota.data.length === 0">
+              <tr v-if="localCustomersQuota.length === 0">
                 <td colspan="4" class="py-8 text-center text-xs text-slate-400 uppercase tracking-widest font-semibold">
                   Tidak ada data kuota pelanggan aktif
                 </td>
@@ -200,31 +219,18 @@
           </table>
         </div>
 
-        <!-- Pagination Controls (Full Windowed) -->
-        <div v-if="customersQuota.last_page > 1" class="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 pt-4 border-t border-slate-100">
-          <p class="text-xs text-slate-500 font-medium order-2 sm:order-1">
-            Halaman <span class="font-bold text-slate-700">{{ customersQuota.current_page }}</span> dari {{ customersQuota.last_page }}
-            <span class="text-slate-300 mx-1">·</span>
-            {{ customersQuota.total }} pelanggan
-          </p>
-          <nav class="flex items-center gap-1 order-1 sm:order-2" aria-label="Pagination">
-            <template v-for="item in quotaPages" :key="item">
-              <span
-                v-if="item === '...'"
-                class="inline-flex items-end justify-center h-8 w-5 text-sm text-slate-400 pb-0.5"
-              >···</span>
-              <Link
-                v-else
-                :href="route('dashboard', { ...dashboardFilters, page: item })"
-                :class="[
-                  'inline-flex items-center justify-center h-8 w-8 rounded-md text-xs font-medium border transition-all duration-150',
-                  item === customersQuota.current_page
-                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-100 scale-105'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600 shadow-sm'
-                ]"
-              >{{ item }}</Link>
-            </template>
-          </nav>
+        <!-- Infinite Scroll Trigger -->
+        <div ref="loadMoreTrigger" class="flex items-center justify-center py-6 mt-4">
+          <div v-if="customersQuota.next_page_url" class="flex items-center space-x-2 text-slate-500">
+            <svg class="animate-spin h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span class="text-sm font-medium">Memuat data selanjutnya...</span>
+          </div>
+          <div v-else-if="localCustomersQuota.length > 0" class="text-xs font-medium text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
+            Semua {{ customersQuota.total }} pelanggan telah dimuat
+          </div>
         </div>
       </div>
     </div>
@@ -232,7 +238,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue';
 import { usePage, Link, router } from '@inertiajs/vue3';
 import AppLayout from '../Layouts/AppLayout.vue';
 import LiveMonitoringWidget from '../Components/LiveMonitoringWidget.vue';
@@ -261,15 +267,32 @@ const dashboardFilters = computed(() => ({
   sisa_kuota: filters.sisa_kuota,
 }));
 
-// Full windowed pagination — always shows 5 pages in the window
-const quotaPages = computed(() => {
-  const current = customersQuota.value.current_page;
-  const last = customersQuota.value.last_page;
-  if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
-  if (current <= 4) return [1, 2, 3, 4, 5, '...', last];
-  if (current >= last - 3) return [1, '...', last - 4, last - 3, last - 2, last - 1, last];
-  return [1, '...', current - 2, current - 1, current, current + 1, current + 2, '...', last];
-});
+// Infinite Scroll Logic
+const localCustomersQuota = ref([...(customersQuota.value?.data || [])]);
+const loadMoreTrigger = ref(null);
+const isLoadingMore = ref(false);
+let observer = null;
+
+watch(() => customersQuota.value, (newVal) => {
+  if (!newVal) return;
+  if (newVal.current_page === 1) {
+    localCustomersQuota.value = [...newVal.data];
+  } else {
+    localCustomersQuota.value = [...localCustomersQuota.value, ...newVal.data];
+  }
+  isLoadingMore.value = false;
+}, { deep: true });
+
+const loadMore = () => {
+  if (customersQuota.value.next_page_url && !isLoadingMore.value) {
+    isLoadingMore.value = true;
+    router.get(customersQuota.value.next_page_url, {}, {
+      preserveState: true,
+      preserveScroll: true,
+      only: ['customersQuota'],
+    });
+  }
+};
 
 let searchTimeout = null;
 const debouncedSearch = () => {
@@ -298,6 +321,16 @@ const currentDate = computed(() => {
 const authUserId = computed(() => page.props.auth?.user?.id);
 
 onMounted(() => {
+  observer = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) {
+      loadMore();
+    }
+  }, { rootMargin: '300px' });
+  
+  if (loadMoreTrigger.value) {
+    observer.observe(loadMoreTrigger.value);
+  }
+
   if (window.Echo && authUserId.value) {
     window.Echo.private(`data-gas.${authUserId.value}`)
       .listen('DataGasUpdated', (e) => {
@@ -307,6 +340,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  if (observer) observer.disconnect();
+  
   if (window.Echo && authUserId.value) {
     window.Echo.leave(`data-gas.${authUserId.value}`);
   }

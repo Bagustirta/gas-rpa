@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AkunPangkalan;
+use App\Models\ActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -34,9 +35,17 @@ class AkunPangkalanController extends Controller
             'password' => ['required', 'string', 'max:255'],
         ]);
 
-        AkunPangkalan::create([
+        $akun = AkunPangkalan::create([
             ...$validated,
             'user_id' => Auth::id(),
+        ]);
+
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'create_pangkalan',
+            'description' => "Menambahkan akun pangkalan baru: {$akun->nama_pangkalan}",
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
         ]);
 
         return redirect()->route('akun-pangkalan.index')->with('success', 'Akun Pangkalan berhasil ditambahkan.');
@@ -51,10 +60,22 @@ class AkunPangkalanController extends Controller
         $validated = $request->validate([
             'nama_pangkalan' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'max:255'],
-            'password' => ['required', 'string', 'max:255'],
+            'password' => ['nullable', 'string', 'max:255'],
         ]);
 
+        if (empty($validated['password'])) {
+            unset($validated['password']);
+        }
+
         $akunPangkalan->update($validated);
+
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'update_pangkalan',
+            'description' => "Memperbarui data pangkalan: {$akunPangkalan->nama_pangkalan}",
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
 
         return redirect()->route('akun-pangkalan.index')->with('success', 'Akun Pangkalan berhasil diperbarui.');
     }
@@ -65,7 +86,16 @@ class AkunPangkalanController extends Controller
             abort(403);
         }
 
+        $namaPangkalan = $akunPangkalan->nama_pangkalan;
         $akunPangkalan->delete();
+
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'delete_pangkalan',
+            'description' => "Menghapus akun pangkalan: {$namaPangkalan}",
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+        ]);
 
         return redirect()->route('akun-pangkalan.index')->with('success', 'Akun Pangkalan berhasil dihapus.');
     }

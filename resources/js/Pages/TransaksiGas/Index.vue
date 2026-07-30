@@ -42,7 +42,7 @@
             title="Mengirim data transaksi ke MyPertamina"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 11H19.21" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
             <span>Lapor Pertamina</span>
           </button>
@@ -370,7 +370,7 @@
             </thead>
             <tbody class="divide-y divide-slate-100 text-sm">
               <tr
-                v-for="t in transaksis.data"
+                v-for="t in localTransaksis"
                 :key="t.id"
                 :class="[
                   'hover:bg-slate-50/70 transition-all duration-150',
@@ -460,8 +460,8 @@
                   </div>
                 </td>
               </tr>
-              <tr v-if="transaksis.data.length === 0">
-                <td colspan="7" class="py-10 text-center text-xs text-slate-400 uppercase tracking-widest font-bold">
+              <tr v-if="localTransaksis.length === 0">
+                <td colspan="7" class="px-4 py-12 text-center text-xs text-slate-400 uppercase tracking-widest font-bold">
                   Tidak ada data transaksi ditemukan
                 </td>
               </tr>
@@ -469,33 +469,20 @@
           </table>
         </div>
 
-        <!-- Pagination (Full Windowed) -->
-        <div v-if="transaksis.last_page > 1" class="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 pt-4 border-t border-slate-100">
-          <p class="text-xs text-slate-500 font-medium order-2 sm:order-1">
-            Halaman <span class="font-bold text-slate-700">{{ transaksis.current_page }}</span> dari {{ transaksis.last_page }}
-            <span class="text-slate-300 mx-1">·</span>
-            {{ transaksis.total }} transaksi
-          </p>
-          <nav class="flex items-center gap-1 order-1 sm:order-2" aria-label="Pagination">
-            <template v-for="item in transaksiPages" :key="item">
-              <span
-                v-if="item === '...'"
-                class="inline-flex items-end justify-center h-8 w-5 text-sm text-slate-400 pb-0.5"
-              >···</span>
-              <Link
-                v-else
-                :href="route('transaksi-gas.index', { ...currentFilters, page: item })"
-                :class="[
-                  'inline-flex items-center justify-center h-8 w-8 rounded-md text-xs font-medium border transition-all duration-150',
-                  item === transaksis.current_page
-                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-100 scale-105'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600 shadow-sm'
-                ]"
-              >{{ item }}</Link>
-            </template>
-          </nav>
-        </div>
+    <!-- Infinite Scroll Trigger -->
+    <div ref="loadMoreTrigger" class="flex items-center justify-center py-6 mt-4">
+      <div v-if="transaksis.next_page_url" class="flex items-center space-x-2 text-slate-500">
+        <svg class="animate-spin h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span class="text-sm font-medium">Memuat data selanjutnya...</span>
       </div>
+      <div v-else-if="localTransaksis.length > 0" class="text-xs font-medium text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
+        Semua {{ transaksis.total }} transaksi telah dimuat
+      </div>
+    </div>
+  </div>
 
 
 
@@ -691,7 +678,7 @@
               ]">
                 <!-- RPA Icon -->
                 <svg v-if="rpaConfirmType === 'rpa'" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 11H19.21" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
                 <!-- Audit Icon -->
                 <svg v-else-if="rpaConfirmType === 'audit'" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -857,22 +844,32 @@ const currentFilters = computed(() => ({
   tanggal_selesai: filters.tanggal_selesai,
 }));
 
-// Full windowed pagination — always shows 5 pages in the window
-const transaksiPages = computed(() => {
-  const current = transaksis.value.current_page;
-  const last = transaksis.value.last_page;
-  if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
-  // Near start: pages 1-5 ... last
-  if (current <= 4) {
-    return [1, 2, 3, 4, 5, '...', last];
+// Infinite Scroll Logic
+const localTransaksis = ref([...(transaksis.value?.data || [])]);
+const loadMoreTrigger = ref(null);
+const isLoadingMore = ref(false);
+let observer = null;
+
+watch(() => transaksis.value, (newVal) => {
+  if (!newVal) return;
+  if (newVal.current_page === 1) {
+    localTransaksis.value = [...newVal.data];
+  } else {
+    localTransaksis.value = [...localTransaksis.value, ...newVal.data];
   }
-  // Near end: 1 ... last-4 to last
-  if (current >= last - 3) {
-    return [1, '...', last - 4, last - 3, last - 2, last - 1, last];
+  isLoadingMore.value = false;
+}, { deep: true });
+
+const loadMore = () => {
+  if (transaksis.value.next_page_url && !isLoadingMore.value) {
+    isLoadingMore.value = true;
+    router.get(transaksis.value.next_page_url, {}, {
+      preserveState: true,
+      preserveScroll: true,
+      only: ['transaksis'],
+    });
   }
-  // Middle: 1 ... current-2 current-1 current current+1 current+2 ... last
-  return [1, '...', current - 2, current - 1, current, current + 1, current + 2, '...', last];
-});
+};
 
 const showDeleteModal = ref(false);
 const showDistModal = ref(false);
@@ -895,14 +892,14 @@ const distForm = useForm({
 const selectedIds = ref([]);
 
 const isAllSelected = computed(() => {
-  return transaksis.value.data.length > 0 && selectedIds.value.length === transaksis.value.data.length;
+  return localTransaksis.value.length > 0 && selectedIds.value.length === localTransaksis.value.length;
 });
 
 const toggleSelectAll = () => {
   if (isAllSelected.value) {
     selectedIds.value = [];
   } else {
-    selectedIds.value = transaksis.value.data.map(t => t.id);
+    selectedIds.value = localTransaksis.value.map(t => t.id);
   }
 };
 
@@ -1246,6 +1243,16 @@ const submitDistribusi = () => {
 };
 
 onMounted(() => {
+  observer = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) {
+      loadMore();
+    }
+  }, { rootMargin: '300px' });
+  
+  if (loadMoreTrigger.value) {
+    observer.observe(loadMoreTrigger.value);
+  }
+
   // 1. Minta Izin Notifikasi Browser
   if ("Notification" in window) {
     if (Notification.permission !== "granted" && Notification.permission !== "denied") {

@@ -14,10 +14,10 @@ use Illuminate\Foundation\Auth\EmailVerificationRequest;
 // Guest Routes
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:20,1');
 
     Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
-    Route::post('/register', [RegisterController::class, 'register'])->middleware('throttle:3,1');
+    Route::post('/register', [RegisterController::class, 'register'])->middleware('throttle:10,1');
 });
 
 // Authenticated but unverified can see this
@@ -38,6 +38,10 @@ Route::middleware('auth')->group(function () {
 
     // Logout
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+    // Web Push Subscriptions
+    Route::post('/push-subscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'store'])->name('push.subscribe');
+    Route::post('/push-unsubscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'destroy'])->name('push.unsubscribe');
 });
 
 // Authenticated and Verified Routes
@@ -96,6 +100,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Super Admin: Manajemen Agen/User & Monitoring
     Route::middleware('super_admin')->prefix('superadmin')->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\SuperAdminController::class, 'dashboard'])->name('superadmin.dashboard');
+        Route::get('/logs', [\App\Http\Controllers\SuperAdminController::class, 'logs'])->name('superadmin.logs');
+        Route::get('/logs/location/{ip}', [\App\Http\Controllers\SuperAdminController::class, 'getLocation'])->name('superadmin.logs.location');
         
         Route::prefix('users')->name('users.')->group(function () {
             Route::get('/', [\App\Http\Controllers\UserController::class, 'index'])->name('index');

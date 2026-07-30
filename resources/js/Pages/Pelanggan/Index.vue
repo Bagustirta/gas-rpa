@@ -94,7 +94,7 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 text-sm">
-              <tr v-for="pelanggan in pelanggans.data" :key="pelanggan.id" class="hover:bg-slate-50/70 transition-all duration-150">
+              <tr v-for="(pelanggan, index) in localPelanggans" :key="pelanggan.id" class="hover:bg-slate-50/80 transition-colors group">
                 <!-- NIK -->
                 <td class="py-3.5 px-4 font-mono text-slate-800 tracking-wider">
                   <div class="flex items-center space-x-2">
@@ -157,7 +157,7 @@
                   </div>
                 </td>
               </tr>
-              <tr v-if="pelanggans.data.length === 0">
+              <tr v-if="localPelanggans.length === 0">
                 <td colspan="4" class="py-10 text-center text-xs text-slate-400 uppercase tracking-widest font-bold">
                   Tidak ada data pelanggan ditemukan
                 </td>
@@ -166,32 +166,6 @@
           </table>
         </div>
 
-        <!-- Pagination (Full Windowed) -->
-        <div v-if="pelanggans.last_page > 1" class="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 pt-4 border-t border-slate-100">
-          <p class="text-xs text-slate-500 font-medium order-2 sm:order-1">
-            Halaman <span class="font-bold text-slate-700">{{ pelanggans.current_page }}</span> dari {{ pelanggans.last_page }}
-            <span class="text-slate-300 mx-1">·</span>
-            {{ pelanggans.total }} pelanggan
-          </p>
-          <nav class="flex items-center gap-1 order-1 sm:order-2" aria-label="Pagination">
-            <template v-for="item in pelangganPages" :key="item">
-              <span
-                v-if="item === '...'"
-                class="inline-flex items-end justify-center h-8 w-5 text-sm text-slate-400 pb-0.5"
-              >···</span>
-              <Link
-                v-else
-                :href="route('pelanggan.index', { ...pelangganFilters, page: item })"
-                :class="[
-                  'inline-flex items-center justify-center h-8 w-8 rounded-md text-xs font-medium border transition-all duration-150',
-                  item === pelanggans.current_page
-                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-100 scale-105'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600 shadow-sm'
-                ]"
-              >{{ item }}</Link>
-            </template>
-          </nav>
-        </div>
       </div>
 
       <!-- Add/Edit Modal -->
@@ -331,7 +305,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue';
 import { usePage, useForm, router, Link } from '@inertiajs/vue3';
 import AppLayout from '../../Layouts/AppLayout.vue';
 
@@ -350,16 +324,48 @@ const pelangganFilters = computed(() => ({
   sisa_kuota: filters.sisa_kuota,
 }));
 
-// Full windowed pagination — always shows 5 pages in the window
-const pelangganPages = computed(() => {
-  const current = pelanggans.value.current_page;
-  const last = pelanggans.value.last_page;
-  if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
-  if (current <= 4) return [1, 2, 3, 4, 5, '...', last];
-  if (current >= last - 3) return [1, '...', last - 4, last - 3, last - 2, last - 1, last];
-  return [1, '...', current - 2, current - 1, current, current + 1, current + 2, '...', last];
+// Infinite Scroll Logic
+const localPelanggans = ref([...(pelanggans.value?.data || [])]);
+const loadMoreTrigger = ref(null);
+const isLoadingMore = ref(false);
+let observer = null;
+
+watch(() => pelanggans.value, (newVal) => {
+  if (!newVal) return;
+  if (newVal.current_page === 1) {
+    localPelanggans.value = [...newVal.data];
+  } else {
+    localPelanggans.value = [...localPelanggans.value, ...newVal.data];
+  }
+  isLoadingMore.value = false;
+}, { deep: true });
+
+const loadMore = () => {
+  if (pelanggans.value.next_page_url && !isLoadingMore.value) {
+    isLoadingMore.value = true;
+    router.get(pelanggans.value.next_page_url, {}, {
+      preserveState: true,
+      preserveScroll: true,
+      only: ['pelanggans'],
+    });
+  }
+};
+
+onMounted(() => {
+  observer = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) {
+      loadMore();
+    }
+  }, { rootMargin: '300px' });
+  
+  if (loadMoreTrigger.value) {
+    observer.observe(loadMoreTrigger.value);
+  }
 });
 
+onUnmounted(() => {
+  if (observer) observer.disconnect();
+});
 const showModal = ref(false);
 const isEditing = ref(false);
 const showImportModal = ref(false);

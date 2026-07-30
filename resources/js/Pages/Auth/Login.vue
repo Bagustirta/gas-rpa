@@ -1,4 +1,8 @@
 <template>
+  <Head>
+    <title>Login</title>
+    <meta head-key="description" name="description" content="GAS-RPA adalah Sistem Otomatisasi Distribusi dan Pencatatan Gas LPG 3Kg. Kelola agen, lapor MyPertamina, dan cek sisa kuota pelanggan lebih cepat." />
+  </Head>
   <div class="min-h-dvh bg-slate-50 flex flex-col justify-center items-center px-4 relative overflow-hidden font-sans">
     <!-- Background soft glow elements -->
     <div class="absolute w-96 h-96 rounded-full bg-indigo-200/40 blur-[120px] top-1/4 left-1/4 -z-10"></div>
@@ -74,10 +78,10 @@
           <!-- Submit Button -->
           <button
             type="submit"
-            :disabled="form.processing"
+            :disabled="isLoading || form.processing"
             class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-sm py-3 rounded-xl hover:from-indigo-500 hover:to-violet-500 focus:outline-none shadow-md shadow-indigo-200 active:scale-[0.98] transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none"
           >
-            <span v-if="form.processing" class="flex items-center justify-center">
+            <span v-if="isLoading || form.processing" class="flex items-center justify-center">
               <svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -96,28 +100,65 @@
         </div>
       </div>
 
-      <!-- Footer Info -->
-      <p class="text-center text-[10px] text-slate-400 mt-8">
-        &copy; 2026 Pangkalan LPG 3Kg. All rights reserved.<br>
-        Otomasi Robot Process Automation (RPA) Sync.
-      </p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { useForm, Link } from '@inertiajs/vue3';
+import { useForm, Link, Head } from '@inertiajs/vue3';
+import { ref } from 'vue';
+
+const isLoading = ref(false);
 
 const form = useForm({
   email: '',
   password: '',
   remember: false,
   website_hp: '',
+  latitude: null,
+  longitude: null,
 });
 
 const submit = () => {
+  // Cegah double submit saat menunggu lokasi atau request
+  if (isLoading.value || form.processing) return;
+  
+  isLoading.value = true;
+
+  // Mencoba mendapatkan lokasi terlebih dahulu
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        form.latitude = position.coords.latitude;
+        form.longitude = position.coords.longitude;
+        doSubmit();
+      },
+      (error) => {
+        // Jika user menolak (Deny) atau terjadi error, tetap lanjutkan login tanpa lokasi
+        console.warn('Geolocation error:', error);
+        doSubmit();
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 1500,
+        maximumAge: 60000
+      }
+    );
+  } else {
+    // Jika browser tidak mendukung, langsung login
+    doSubmit();
+  }
+};
+
+const doSubmit = () => {
   form.post(route('login'), {
-    onFinish: () => form.reset('password'),
+    onFinish: () => {
+        form.reset('password');
+        isLoading.value = false;
+    },
+    onError: () => {
+        isLoading.value = false;
+    }
   });
 };
 </script>

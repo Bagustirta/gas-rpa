@@ -49,7 +49,7 @@ class TransaksiGasController extends Controller
         }
 
         $transaksis = $query->orderBy('tanggal_transaksi', 'desc')
-            ->paginate(15)
+            ->paginate(100)
             ->onEachSide(1)
             ->withQueryString()
             ->through(fn($item) => [

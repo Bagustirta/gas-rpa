@@ -28,7 +28,10 @@ class AuthController extends Controller
         ]);
 
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
-            if (!Auth::user()->is_active) {
+            /** @var \App\Models\User $user */
+            $user = Auth::user();
+
+            if (!$user->is_active) {
                 Auth::logout();
                 return back()->withErrors([
                     'email' => 'Akun Anda telah dinonaktifkan oleh Administrator.',
@@ -36,9 +39,11 @@ class AuthController extends Controller
             }
 
             $request->session()->regenerate();
+            Auth::logoutOtherDevices($request->password);
 
-            if (Auth::user()->isSuperAdmin()) {
-                return redirect()->intended(route('superadmin.dashboard'));
+            if ($user->isSuperAdmin()) {
+                $route = 'superadmin.dashboard';
+                return redirect()->intended(route($route));
             }
 
             return redirect()->intended(route('dashboard'));

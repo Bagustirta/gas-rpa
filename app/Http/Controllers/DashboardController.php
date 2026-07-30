@@ -22,6 +22,7 @@ class DashboardController extends Controller
         $totalPelanggan = Pelanggan::where('user_id', $userId)->where('status', true)->count();
         $transaksiHariIni = TransaksiGas::whereHas('akunPangkalan', fn($q) => $q->where('user_id', $userId))
             ->whereDate('tanggal_transaksi', today())
+            ->where('status_lapor', 'sukses')
             ->count();
         $tabungBulanIni = TransaksiGas::whereHas('akunPangkalan', fn($q) => $q->where('user_id', $userId))
             ->whereMonth('tanggal_transaksi', $bulan)
@@ -37,6 +38,11 @@ class DashboardController extends Controller
             ->havingRaw('SUM(jumlah_tabung) >= 4')
             ->get()
             ->count();
+
+        $transaksiLimit = \App\Models\RpaSync::where('user_id', $userId)
+            ->whereMonth('created_at', $bulan)
+            ->whereYear('created_at', $tahun)
+            ->sum('limit_records');
 
         $belumDilaporkan = TransaksiGas::whereHas('akunPangkalan', fn($q) => $q->where('user_id', $userId))
             ->whereMonth('tanggal_transaksi', $bulan)
@@ -70,7 +76,7 @@ class DashboardController extends Controller
         $customersQuota = $query->select('*')
             ->selectSub($subquery, 'total_tabung_bulan_ini')
             ->orderBy('total_tabung_bulan_ini', 'desc')
-            ->paginate(10)
+            ->paginate(100)
             ->onEachSide(1)
             ->withQueryString()
             ->through(fn($item) => [
@@ -123,6 +129,7 @@ class DashboardController extends Controller
                 'transaksiHariIni' => $transaksiHariIni,
                 'tabungBulanIni'   => (int)$tabungBulanIni,
                 'kuotaHabis'       => $kuotaHabis,
+                'transaksiLimit'   => $transaksiLimit,
                 'belumDilaporkan'  => $belumDilaporkan,
             ],
             'customersQuota'  => $customersQuota,

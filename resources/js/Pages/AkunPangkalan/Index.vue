@@ -122,20 +122,19 @@
                 <p v-if="form.errors.email" class="text-xs text-red-500 mt-1 font-medium">{{ form.errors.email }}</p>
               </div>
 
-              <!-- Password -->
-              <div>
-                <label for="modal-password" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2">Kata Sandi Portal Subsiditepat</label>
+                <label for="modal-password" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2">
+                  Kata Sandi Portal Subsiditepat <span v-if="isEditing" class="text-slate-400 font-normal normal-case">(Kosongkan jika tidak ingin diubah)</span>
+                </label>
                 <input
                   id="modal-password"
                   v-model="form.password"
-                  type="text"
-                  required
-                  placeholder="Kata sandi portal"
+                  type="password"
+                  :required="!isEditing"
+                  :placeholder="isEditing ? '••••••••' : 'Kata sandi portal'"
                   class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 font-medium placeholder-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm transition-all duration-200"
                   :class="{ 'border-red-500 bg-red-50/10': form.errors.password }"
                 />
                 <p v-if="form.errors.password" class="text-xs text-red-500 mt-1 font-medium">{{ form.errors.password }}</p>
-              </div>
 
               <!-- Footer -->
               <div class="flex justify-end space-x-3 pt-6 border-t border-slate-200 mt-6">
@@ -221,7 +220,7 @@ const openEditModal = (akun) => {
   form.clearErrors();
   form.nama_pangkalan = akun.nama_pangkalan;
   form.email = akun.email;
-  form.password = akun.password;
+  form.password = ''; // Do not prepopulate password for security
   activeAkun.value = akun;
   isEditing.value = true;
   showModal.value = true;

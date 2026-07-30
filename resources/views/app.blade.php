@@ -9,7 +9,7 @@
         
         <!-- SEO Metadata -->
         <meta name="description" content="GAS-RPA adalah Sistem Otomatisasi Distribusi dan Pencatatan Gas LPG 3Kg. Lapor MyPertamina dan cek sisa kuota pelanggan lebih cepat dalam satu klik.">
-        <meta name="keywords" content="GAS-RPA, pangkalan lpg 3kg, mypertamina, bot lpg, otomatisasi gas, rpa">
+        <meta name="keywords" content="GAS-RPA, pangkalan lpg 3kg, mypertamina, bot lpg, otomatisasi gas, rpa, anom elektronik, gas anom elektronik">
         <meta name="author" content="Ocean Tech">
         
         <!-- Open Graph / Facebook -->

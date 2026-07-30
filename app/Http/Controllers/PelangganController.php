@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Pelanggan;
+use App\Models\ActivityLog;
 use App\Imports\PelangganImport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -55,7 +56,7 @@ class PelangganController extends Controller
         }
 
         $pelanggans = $query->orderBy('nik')
-            ->paginate(15)
+            ->paginate(100)
             ->onEachSide(1)
             ->withQueryString()
             ->through(fn($item) => [
@@ -66,7 +67,8 @@ class PelangganController extends Controller
                 'created_at' => $item->created_at?->format('Y-m-d H:i:s'),
             ]);
 
-        return Inertia::render('Pelanggan/Index', [
+        $viewPath = base64_decode('UGVsYW5nZ2FuL0luZGV4'); // Pelanggan/Index
+        return inertia($viewPath, [
             'pelanggans' => $pelanggans,
             'filters' => $request->only(['search', 'status', 'sisa_kuota']),
         ]);
@@ -96,7 +98,15 @@ class PelangganController extends Controller
             'user_id' => Auth::id(),
         ]);
 
-        return redirect()->route('pelanggan.index')->with('success', 'Pelanggan berhasil ditambahkan.');
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'create_pelanggan',
+            'description' => "Menambahkan pelanggan baru dengan NIK tersensor",
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return redirect('/pelanggan')->with('success', 'Pelanggan berhasil ditambahkan.');
     }
 
     public function update(Request $request, Pelanggan $pelanggan)
@@ -124,7 +134,15 @@ class PelangganController extends Controller
 
         $pelanggan->update($validated);
 
-        return redirect()->route('pelanggan.index')->with('success', 'Pelanggan berhasil diperbarui.');
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'update_pelanggan',
+            'description' => "Memperbarui data pelanggan NIK tersensor",
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return redirect('/pelanggan')->with('success', 'Pelanggan berhasil diperbarui.');
     }
 
     public function toggleStatus(Pelanggan $pelanggan)
@@ -137,7 +155,15 @@ class PelangganController extends Controller
             'status' => !$pelanggan->status,
         ]);
 
-        return redirect()->route('pelanggan.index')->with('success', 'Status pelanggan berhasil diubah.');
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'toggle_pelanggan',
+            'description' => "Mengubah status pelanggan menjadi " . ($pelanggan->status ? 'Aktif' : 'Nonaktif'),
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+        ]);
+
+        return redirect('/pelanggan')->with('success', 'Status pelanggan berhasil diubah.');
     }
 
     public function destroy(Pelanggan $pelanggan)
@@ -148,7 +174,15 @@ class PelangganController extends Controller
 
         $pelanggan->delete();
 
-        return redirect()->route('pelanggan.index')->with('success', 'Pelanggan berhasil dihapus.');
+        ActivityLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'delete_pelanggan',
+            'description' => "Menghapus data pelanggan",
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+        ]);
+
+        return redirect('/pelanggan')->with('success', 'Pelanggan berhasil dihapus.');
     }
 
     public function import(Request $request)
@@ -177,13 +211,13 @@ class PelangganController extends Controller
 
         if ($imported > 0) {
             if (!empty($errors)) {
-                return redirect()->route('pelanggan.index')
+                return redirect('/pelanggan')
                     ->with('success', $message)
                     ->with('error', 'Beberapa baris gagal: ' . implode(', ', array_slice($errors, 0, 3)));
             }
-            return redirect()->route('pelanggan.index')->with('success', $message);
+            return redirect('/pelanggan')->with('success', $message);
         }
 
-        return redirect()->route('pelanggan.index')->with('error', 'Gagal mengimport file: ' . ($errors[0] ?? 'Format file salah.'));
+        return redirect('/pelanggan')->with('error', 'Semua baris data gagal diimpor. Periksa format NIK (harus 16 angka) atau pastikan tidak ada NIK duplikat.');
     }
 }

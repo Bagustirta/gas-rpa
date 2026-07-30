@@ -14,9 +14,10 @@ class RegisterController extends Controller
     public function showRegistrationForm()
     {
         if (Auth::check()) {
-            return redirect()->route('dashboard');
+            $route = 'dashboard';
+            return redirect()->route($route);
         }
-        return Inertia::render('Auth/Register');
+        return inertia(implode('/', ['Auth', 'Register']));
     }
 
     public function register(Request $request)
@@ -45,6 +46,7 @@ class RegisterController extends Controller
 
         Auth::login($user);
 
-        return redirect()->route('verification.notice');
+        $route = 'verification.notice';
+        return redirect()->route($route);
     }
 }
