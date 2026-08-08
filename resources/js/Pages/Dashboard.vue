@@ -343,7 +343,7 @@ onUnmounted(() => {
   if (observer) observer.disconnect();
   
   if (window.Echo && authUserId.value) {
-    window.Echo.leave(`data-gas.${authUserId.value}`);
+    window.Echo.private(`data-gas.${authUserId.value}`).stopListening('DataGasUpdated');
   }
 });
 </script>

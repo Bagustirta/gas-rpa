@@ -1264,20 +1264,11 @@ onMounted(() => {
   if (window.Echo && authUserId.value) {
     window.Echo.private(`rpa-progress.${authUserId.value}`)
       .listen('RpaProgressUpdated', (e) => {
+        if (e.status === 'completed' || e.status === 'failed') {
+            page.props.activeSync = null;
+        }
         // Otomatis refresh data (tabel, card summary, activeSync, dan syncHistory) tanpa reload halaman full
         router.reload({ only: ['transaksis', 'rpaSummary', 'activeSync', 'syncHistory'], preserveScroll: true });
-
-        // 3. Tampilkan Notifikasi Desktop jika tugas Bot selesai atau gagal
-        if (e.status === 'completed' || e.status === 'failed' || e.message?.toLowerCase().includes('selesai')) {
-          if ("Notification" in window && Notification.permission === "granted") {
-            const title = e.status === 'completed' ? 'Bot RPA Selesai!' : 'Update Bot RPA';
-            const icon = e.status === 'completed' ? '/favicon.ico' : '/favicon.ico';
-            new Notification(title, {
-              body: e.message || 'Tugas sinkronisasi telah selesai dikerjakan.',
-              icon: icon
-            });
-          }
-        }
       });
       
     window.Echo.private(`data-gas.${authUserId.value}`)
@@ -1289,8 +1280,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (window.Echo && authUserId.value) {
-    window.Echo.leave(`rpa-progress.${authUserId.value}`);
-    window.Echo.leave(`data-gas.${authUserId.value}`);
+    window.Echo.private(`rpa-progress.${authUserId.value}`).stopListening('RpaProgressUpdated');
+    window.Echo.private(`data-gas.${authUserId.value}`).stopListening('DataGasUpdated');
   }
   pauseSlideShow();
 });

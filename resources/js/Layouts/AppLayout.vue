@@ -192,7 +192,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { Link, usePage, router } from '@inertiajs/vue3';
 import axios from 'axios';
 
@@ -291,12 +291,17 @@ watch(() => page.props.flash, (newFlash) => {
   }
 }, { deep: true, immediate: true });
 
+let toastTimeout = null;
 const showToast = (message, type = 'success') => {
   toast.value.message = message;
   toast.value.type = type;
   toast.value.show = true;
   
-  setTimeout(() => {
+  if (toastTimeout) {
+    clearTimeout(toastTimeout);
+  }
+  
+  toastTimeout = setTimeout(() => {
     toast.value.show = false;
   }, 4000);
 };
@@ -352,7 +357,15 @@ const handleLogout = async () => {
   router.post(route('logout'));
 };
 
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    router.reload({ preserveScroll: true });
+  }
+};
+
 onMounted(() => {
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+
   if (page.props.auth?.user) {
     if ("Notification" in window) {
       if (Notification.permission === "default") {
@@ -363,7 +376,24 @@ onMounted(() => {
         registerServiceWorker();
       }
     }
+
+    // Dengarkan progress RPA secara global untuk notifikasi desktop
+    if (window.Echo) {
+      const authUserId = page.props.auth.user.id;
+      window.Echo.private(`rpa-progress.${authUserId}`)
+        .listen('RpaProgressUpdated', (e) => {
+          // Handle event as needed, without triggering double desktop notification
+        })
+        .listen('SessionInvalidated', () => {
+          // Force reload page to apply logout state and disconnect WebSocket
+          window.location.reload();
+        });
+    }
   }
+});
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
 });
 </script>
 

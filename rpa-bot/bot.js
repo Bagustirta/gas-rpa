@@ -4,6 +4,9 @@ puppeteer.use(StealthPlugin());
 const axios = require('axios');
 const readline = require('readline');
 require('dotenv').config();
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
 
 const LARAVEL_URL = process.env.LARAVEL_APP_URL || process.env.APP_URL || 'http://localhost:8000';
 const API_KEY = process.env.LPG_API_KEY || 'lpg-secret-token-12345';
@@ -11,6 +14,8 @@ const PERTAMINA_URL = process.env.PERTAMINA_PORTAL_URL || 'https://subsiditepat.
 
 // Helper sleep berbasis Node.js agar aman dari Execution Context Destroyed saat page reload
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+
 
 // =========================================================================
 // SISTEM PEMACAH CAPTCHA IN-HOUSE (COMPUTER VISION / CANVAS PIXEL MATCH)
@@ -1034,6 +1039,7 @@ async function run() {
             console.log(`Sisa transaksi siap lapor: ${transactions.length} baris.`);
 
             // 4. Buka Browser (Headless: true agar jalan di background / gaib)
+
             console.log('Membuka browser otomatis (Mode Gaib / Headless)...');
             const browser = await puppeteer.launch({
                 headless: true, // Berjalan secara tersembunyi
@@ -1200,12 +1206,12 @@ async function run() {
                         const hasCaptcha = (captchaFrame !== null);
 
                         if (hasCaptcha) {
-                            if (loginSolverTries < 5) {
+                            if (loginSolverTries < 9999) {
                                 loginSolverTries++;
-                                console.log(`[Login] Mendeteksi Captcha Keamanan di halaman login. Mencoba meretas otomatis (Percobaan ke-${loginSolverTries}/5)...`);
+                                console.log(`[Login] Mendeteksi Captcha Keamanan di halaman login. Mencoba meretas otomatis (Percobaan ke-${loginSolverTries})...`);
                                 const solveSuccess = await autoSolveSliderCaptcha(page);
-                                if (!solveSuccess && loginSolverTries >= 5) {
-                                    console.log('[Login] Bot menyerah setelah 5 kali gagal login captcha. Menunggu Anda menyelesaikannya secara manual...');
+                                if (!solveSuccess && loginSolverTries >= 9999) {
+                                    console.log('[Login] Bot menyerah setelah terlalu banyak gagal login captcha. Menunggu Anda menyelesaikannya secara manual...');
                                 }
                                 await sleep(2000);
                             }
@@ -1794,12 +1800,12 @@ async function run() {
                             }
                         } else {
                             // Coba jalankan sistem In-House Solver kita
-                            if (solverTries < 5) {
+                            if (solverTries < 9999) {
                                 solverTries++;
                                 console.log(`Mencoba meretas Jigsaw Captcha (Percobaan ke-${solverTries})...`);
                                 const solveSuccess = await autoSolveSliderCaptcha(page);
-                                if (!solveSuccess && solverTries >= 5) {
-                                    console.log('Bot In-House menyerah setelah 5 kali gagal. Menunggu bantuan manual Anda di layar browser...');
+                                if (!solveSuccess && solverTries >= 9999) {
+                                    console.log('Bot In-House menyerah setelah terlalu banyak gagal. Menunggu bantuan manual Anda di layar browser...');
                                 }
                             } else {
                                 await sleep(1500);
@@ -1998,6 +2004,8 @@ async function run() {
         console.log(`- Gagal: ${failCount}`);
         console.log(`Status Job diperbarui menjadi: ${statusAkhir.toUpperCase()}`);
         console.log(`===================================================`);
+
+
 
         activeSyncId = null;
         return true;

@@ -104,11 +104,8 @@ class DashboardController extends Controller
                 $isRunning = false;
             }
 
-            // Sembunyikan widget jika tidak berjalan dan sudah >10 menit sejak selesai
-            $finishedAt = $auditProgress->finished_at ? \Carbon\Carbon::parse($auditProgress->finished_at) : null;
-            $isOld = $finishedAt && $finishedAt->diffInMinutes(now()) >= 10;
-
-            if ($isRunning || !$isOld) {
+            // Sembunyikan widget jika tidak berjalan
+            if ($isRunning) {
                 $auditProgressData = [
                     'step'            => $auditProgress->step,
                     'step_label'      => $auditProgress->step_label,

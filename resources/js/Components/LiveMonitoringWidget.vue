@@ -114,9 +114,7 @@ const liveData = ref(props.initialData);
 
 // Sync with initialData changes from parent
 watch(() => props.initialData, (newVal) => {
-  if (!liveData.value) {
-    liveData.value = newVal;
-  }
+  liveData.value = newVal;
 }, { deep: true });
 
 onMounted(() => {
@@ -125,12 +123,8 @@ onMounted(() => {
       .listen('.AuditProgressUpdated', (data) => {
         const isRunning = data.is_running ?? false;
         if (!isRunning && data.finished_at) {
-          const finishedAt = new Date(data.finished_at);
-          const diffInMinutes = (new Date() - finishedAt) / 1000 / 60;
-          if (diffInMinutes >= 10) {
-            liveData.value = null;
-            return;
-          }
+          liveData.value = null;
+          return;
         }
         liveData.value = data;
       });

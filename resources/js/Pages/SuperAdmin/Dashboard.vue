@@ -124,6 +124,10 @@
                 <span class="text-indigo-200 text-xs font-semibold">Job Sinkronisasi Hari Ini</span>
                 <span class="text-2xl font-black text-white">{{ serverStatus.today_rpa_jobs }}</span>
               </div>
+              <div class="flex justify-between items-center bg-indigo-950/50 p-3 rounded-xl border border-indigo-800/50">
+                <span class="text-indigo-200 text-xs font-semibold">Total RAM Bot Terpakai</span>
+                <span class="text-xl font-bold text-white">{{ serverStatus.bot_memory_usage }} MB</span>
+              </div>
             </div>
           </div>
         </div>
@@ -196,12 +200,30 @@
 </template>
 
 <script setup>
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '../../Layouts/AppLayout.vue';
+import { onMounted, onUnmounted } from 'vue';
 
 defineProps({
   stats: Object,
   serverStatus: Object,
   recentTransactions: Array,
+});
+
+let refreshInterval = null;
+
+onMounted(() => {
+  // Auto-refresh data server status, transaksi, & KARTU STATISTIK (stats) secara live setiap 3 detik
+  refreshInterval = setInterval(() => {
+    router.reload({
+      only: ['serverStatus', 'recentTransactions', 'stats'],
+      preserveScroll: true,
+      preserveState: true,
+    });
+  }, 3000);
+});
+
+onUnmounted(() => {
+  if (refreshInterval) clearInterval(refreshInterval);
 });
 </script>

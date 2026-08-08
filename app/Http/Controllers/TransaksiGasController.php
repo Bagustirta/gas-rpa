@@ -122,12 +122,9 @@ class TransaksiGasController extends Controller
                 $isRunning = false;
             }
 
-            $finishedAt = $auditProgress->finished_at ? \Carbon\Carbon::parse($auditProgress->finished_at) : null;
-            $isOld = $finishedAt && $finishedAt->diffInMinutes(now()) >= 10;
-            
             $activeAudit = $isRunning;
 
-            if ($isRunning || !$isOld) {
+            if ($isRunning) {
                 $auditProgressData = [
                     'step'            => $auditProgress->step,
                     'step_label'      => $auditProgress->step_label,
@@ -446,7 +443,7 @@ class TransaksiGasController extends Controller
         \App\Models\RpaSync::where('user_id', $userId)->whereIn('status', ['pending', 'processing'])
             ->update([
                 'status' => 'failed',
-                'message' => 'Dibatalkan/direset secara manual dari panel admin.',
+                'message' => 'Proses pelaporan telah dihentikan secara manual.',
                 'completed_at' => now(),
             ]);
 

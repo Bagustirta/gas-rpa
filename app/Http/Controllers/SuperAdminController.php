@@ -45,14 +45,41 @@ class SuperAdminController extends Controller
         $activeBots = RpaSync::where('status', 'processing')->count();
         $totalRpaJobs = RpaSync::whereDate('created_at', today())->count();
 
-        // Bisa ditambahkan logika CPU / RAM monitoring jika menggunakan shell_exec() di Linux
-        // Namun karena ini Windows/Laragon, kita fokus ke statistik aplikasi (Aman & Ringan)
+        // Ambil penggunaan memori bot (Node.js & Chrome) jika di Windows
+        $botMemory = 0;
+        try {
+                $outputNode = shell_exec('tasklist /FI "IMAGENAME eq node.exe" /FO CSV /NH 2>NUL');
+                
+                $lines = explode("\n", trim($outputNode));
+                foreach ($lines as $line) {
+                    if (strpos($line, 'node.exe') !== false) {
+                        $parts = str_getcsv($line);
+                        if (isset($parts[4])) {
+                            $memKb = (int) str_replace([' ', ',', '.', 'K', 'k', '"'], '', $parts[4]);
+                            $botMemory += $memKb;
+                        }
+                    }
+                }
+
+                // KHUSUS CHROME: Ambil HANYA yang 'headless' (Bot) via WMIC, abaikan Chrome pribadi user
+                $outputChrome = shell_exec('wmic process where "name=\'chrome.exe\' and CommandLine like \'%--headless%\'" get WorkingSetSize 2>NUL');
+                if ($outputChrome) {
+                    preg_match_all('/\d+/', $outputChrome, $matches);
+                    foreach ($matches[0] as $bytes) {
+                        $botMemory += round((int)$bytes / 1024); // Convert Bytes to KB
+                    }
+                }
+        } catch (\Exception $e) {
+            // Abaikan jika command gagal
+        }
+
         $serverStatus = [
             'status' => 'Online',
             'php_version' => PHP_VERSION,
             'laravel_version' => app()->version(),
             'os' => php_uname('s') . ' ' . php_uname('r'),
             'memory_usage' => round(memory_get_usage(true) / 1024 / 1024, 2),
+            'bot_memory_usage' => round($botMemory / 1024, 2),
             'active_bots' => $activeBots,
             'today_rpa_jobs' => $totalRpaJobs,
         ];

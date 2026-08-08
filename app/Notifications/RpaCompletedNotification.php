@@ -43,6 +43,6 @@ class RpaCompletedNotification extends Notification
             ->title($this->title)
             ->icon('/favicon.ico')
             ->body($this->message)
-            ->options(['TTL' => 1000]); // Time to live in seconds
+            ->options(['TTL' => 1000, 'urgency' => 'high']); // Time to live in seconds & set high priority for mobile
     }
 }

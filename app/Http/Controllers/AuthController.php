@@ -40,6 +40,12 @@ class AuthController extends Controller
 
             $request->session()->regenerate();
             Auth::logoutOtherDevices($request->password);
+            
+            // Beritahu tab/browser lama via WebSocket bahwa sesi mereka sudah tidak valid
+            broadcast(new \App\Events\SessionInvalidated($user->id));
+
+            // Hapus langganan notifikasi perangkat sebelumnya (agar notif hanya masuk ke device terbaru)
+            $user->pushSubscriptions()->delete();
 
             if ($user->isSuperAdmin()) {
                 $route = 'superadmin.dashboard';

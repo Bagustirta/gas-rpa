@@ -4,8 +4,19 @@ self.addEventListener('push', function (e) {
     }
 
     if (e.data) {
-        var msg = e.data.json();
-        e.waitUntil(self.registration.showNotification(msg.title, {
+        let msg = {};
+        try {
+            msg = e.data.json();
+        } catch (err) {
+            console.error('Failed to parse push data as JSON', err);
+            msg = {
+                title: 'GAS-RPA Notification',
+                body: e.data.text(),
+                icon: '/logo.png'
+            };
+        }
+
+        e.waitUntil(self.registration.showNotification(msg.title || 'Notifikasi Baru', {
             body: msg.body,
             icon: msg.icon || '/logo.png',
             actions: msg.actions,
