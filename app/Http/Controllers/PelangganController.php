@@ -220,4 +220,9 @@ class PelangganController extends Controller
 
         return redirect('/pelanggan')->with('error', 'Semua baris data gagal diimpor. Periksa format NIK (harus 16 angka) atau pastikan tidak ada NIK duplikat.');
     }
+
+    public function export()
+    {
+        return Excel::download(new \App\Exports\PelangganExport, 'data_pelanggan.xlsx');
+    }
 }

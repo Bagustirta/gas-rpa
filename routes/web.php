@@ -81,6 +81,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/{pelanggan}', [PelangganController::class, 'destroy'])->name('destroy');
         Route::post('/{pelanggan}/toggle-status', [PelangganController::class, 'toggleStatus'])->name('toggle-status');
         Route::post('/import', [PelangganController::class, 'import'])->name('import');
+        Route::get('/export', [PelangganController::class, 'export'])->name('export');
     });
 
     // Transaksi Gas (CRUD & Actions) - Butuh Langganan Aktif

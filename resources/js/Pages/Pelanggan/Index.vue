@@ -8,6 +8,16 @@
           <p class="text-xs text-slate-500">Kelola nomor NIK pelanggan penerima LPG 3 Kg bersubsidi</p>
         </div>
         <div class="flex items-center space-x-2.5">
+          <a
+            :href="route('pelanggan.export')"
+            class="inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-650 transition-all duration-200 active:scale-[0.98] shadow-sm"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            <span>Export Excel</span>
+          </a>
+
           <button
             @click="openImportModal"
             class="inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-650 transition-all duration-200 active:scale-[0.98] shadow-sm"
