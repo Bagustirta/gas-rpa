@@ -18,6 +18,14 @@ class Pelanggan extends Model
         'nik_bindex',
         'status',
         'user_id',
+        'provinsi',
+        'kabupaten_kota',
+        'kecamatan',
+        'jenis_kelamin',
+        'tempat_lahir',
+        'tanggal_lahir',
+        'id_unik',
+        'is_synced',
     ];
 
     protected static function booted()

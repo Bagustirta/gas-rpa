@@ -73,13 +73,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/{akunPangkalan}', [AkunPangkalanController::class, 'destroy'])->name('destroy');
     });
 
-    // Pelanggan (CRUD & Import) - Butuh Langganan Aktif
     Route::middleware('subscribed')->prefix('pelanggan')->name('pelanggan.')->group(function () {
         Route::get('/', [PelangganController::class, 'index'])->name('index');
         Route::post('/', [PelangganController::class, 'store'])->name('store');
         Route::put('/{pelanggan}', [PelangganController::class, 'update'])->name('update');
         Route::delete('/{pelanggan}', [PelangganController::class, 'destroy'])->name('destroy');
         Route::post('/{pelanggan}/toggle-status', [PelangganController::class, 'toggleStatus'])->name('toggle-status');
+        Route::post('/sync-all', [PelangganController::class, 'syncAll'])->name('sync-all');
+        Route::post('/{pelanggan}/sync', [PelangganController::class, 'sync'])->name('sync');
         Route::post('/import', [PelangganController::class, 'import'])->name('import');
         Route::get('/export', [PelangganController::class, 'export'])->name('export');
     });

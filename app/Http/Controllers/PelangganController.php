@@ -63,6 +63,14 @@ class PelangganController extends Controller
                 'id' => $item->id,
                 'nik' => $item->nik,
                 'status' => (bool)$item->status,
+                'provinsi' => $item->provinsi,
+                'kabupaten_kota' => $item->kabupaten_kota,
+                'kecamatan' => $item->kecamatan,
+                'jenis_kelamin' => $item->jenis_kelamin,
+                'tempat_lahir' => $item->tempat_lahir,
+                'tanggal_lahir' => $item->tanggal_lahir,
+                'id_unik' => $item->id_unik,
+                'is_synced' => (bool)$item->is_synced,
                 'total_tabung_bulan_ini' => (int) ($item->total_tabung_bulan_ini ?? 0),
                 'created_at' => $item->created_at?->format('Y-m-d H:i:s'),
             ]);
@@ -86,6 +94,7 @@ class PelangganController extends Controller
                 }
             ],
             'status' => ['required', 'boolean'],
+            'tempat_lahir' => ['nullable', 'string', 'max:255'],
         ], [
             'nik.required' => 'NIK wajib diisi.',
             'nik.size' => 'NIK harus tepat 16 digit.',
@@ -95,6 +104,7 @@ class PelangganController extends Controller
         Pelanggan::create([
             'nik' => $validated['nik'],
             'status' => $validated['status'],
+            'tempat_lahir' => $validated['tempat_lahir'] ?? null,
             'user_id' => Auth::id(),
         ]);
 
@@ -126,6 +136,7 @@ class PelangganController extends Controller
                 }
             ],
             'status' => ['required', 'boolean'],
+            'tempat_lahir' => ['nullable', 'string', 'max:255'],
         ], [
             'nik.required' => 'NIK wajib diisi.',
             'nik.size' => 'NIK harus tepat 16 digit.',
@@ -219,6 +230,57 @@ class PelangganController extends Controller
         }
 
         return redirect('/pelanggan')->with('error', 'Semua baris data gagal diimpor. Periksa format NIK (harus 16 angka) atau pastikan tidak ada NIK duplikat.');
+    }
+
+    public function sync(Pelanggan $pelanggan, \App\Services\NikParserService $parser)
+    {
+        if ($pelanggan->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        $parsed = $parser->parse($pelanggan->nik);
+
+        if (!$parsed) {
+            return redirect()->back()->with('error', 'Gagal memproses NIK. NIK tidak valid.');
+        }
+
+        $pelanggan->update([
+            'provinsi' => $parsed['provinsi'],
+            'kabupaten_kota' => $parsed['kabupaten_kota'],
+            'kecamatan' => $parsed['kecamatan'],
+            'jenis_kelamin' => $parsed['jenis_kelamin'],
+            'tempat_lahir' => $pelanggan->tempat_lahir ?? $parsed['kabupaten_kota'],
+            'tanggal_lahir' => $parsed['tanggal_lahir'],
+            'id_unik' => $parsed['id_unik'],
+            'is_synced' => true,
+        ]);
+
+        return redirect()->back()->with('success', 'Data NIK berhasil disinkronisasi.');
+    }
+
+    public function syncAll(\App\Services\NikParserService $parser)
+    {
+        $pelanggans = Pelanggan::where('user_id', Auth::id())->get();
+
+        $count = 0;
+        foreach ($pelanggans as $pelanggan) {
+            $parsed = $parser->parse($pelanggan->nik);
+            if ($parsed) {
+                $pelanggan->update([
+                    'provinsi' => $parsed['provinsi'],
+                    'kabupaten_kota' => $parsed['kabupaten_kota'],
+                    'kecamatan' => $parsed['kecamatan'],
+                    'jenis_kelamin' => $parsed['jenis_kelamin'],
+                    'tempat_lahir' => $pelanggan->tempat_lahir ?? $parsed['kabupaten_kota'],
+                    'tanggal_lahir' => $parsed['tanggal_lahir'],
+                    'id_unik' => $parsed['id_unik'],
+                    'is_synced' => true,
+                ]);
+                $count++;
+            }
+        }
+
+        return redirect()->back()->with('success', "Berhasil mensinkronisasi {$count} data NIK.");
     }
 
     public function export()

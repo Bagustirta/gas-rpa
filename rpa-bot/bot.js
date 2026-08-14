@@ -1038,17 +1038,18 @@ async function run() {
 
             console.log(`Sisa transaksi siap lapor: ${transactions.length} baris.`);
 
-            // 4. Buka Browser (Headless: true agar jalan di background / gaib)
+            // 4. Buka Browser (Headless: false agar terlihat layarnya)
 
-            console.log('Membuka browser otomatis (Mode Gaib / Headless)...');
+            console.log('Membuka browser otomatis (Mode Headless/Latar Belakang)...');
             const browser = await puppeteer.launch({
-                headless: true, // Berjalan secara tersembunyi
-                defaultViewport: null,
-                args: ['--start-maximized', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+                headless: 'new', // Berjalan secara tak terlihat
+                defaultViewport: { width: 1366, height: 768 }, // Paksa ukuran layar desktop agar tidak jadi tampilan HP
+                args: ['--window-size=1366,768', '--start-maximized', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
             });
             activeBrowser = browser; // Set ke global untuk cleanup jika Ctrl+C
 
             const [page] = await browser.pages();
+            await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
             console.log(`Membuka portal Pertamina: ${PERTAMINA_URL}`);
             await page.goto(PERTAMINA_URL, { waitUntil: 'domcontentloaded' });
             await sleep(2000);
@@ -1551,6 +1552,14 @@ async function run() {
                                 return { state: 'limit' };
                             }
 
+                            if (txt.includes('pernyataan persetujuan') || txt.includes('saya telah membaca')) {
+                                return { state: 'pernyataan' };
+                            }
+
+                            if (txt.includes('data pelanggan belum lengkap') || txt.includes('lengkapi data dahulu')) {
+                                return { state: 'incomplete_data' };
+                            }
+
                             if (txt.includes('pilihan jenis pelanggan') || txt.includes('pelanggan terdaftar')) {
                                 return { state: 'modal' };
                             }
@@ -1637,7 +1646,7 @@ async function run() {
                         await api.post(`/api/gagal-lapor/${trx.id}`, {
                             message: 'Gagal: Melebihi batas kewajaran pembelian LPG 3 kg bulan ini.'
                         });
-                        failCount++;
+                        limitCount++;
                         await sleep(1500);
                         continue;
                     }
@@ -1658,6 +1667,260 @@ async function run() {
                         failCount++;
                         await sleep(1500);
                         continue;
+                    }
+
+                    // --- HANDLE DYNAMIC PRE-STATES (Pernyataan & Incomplete Data) ---
+                    let resolvingPreStates = true;
+                    let resolveAttempts = 0;
+                    while (resolvingPreStates && resolveAttempts < 5) {
+                        resolveAttempts++;
+                        
+                        if (searchState === 'pernyataan') {
+                            console.log('Mendeteksi Pernyataan Persetujuan. Mencentang kotak persetujuan...');
+                            
+                            // Centang semua checkbox
+                            await page.evaluate(() => {
+                                const checkboxes = Array.from(document.querySelectorAll('input[type="checkbox"]'));
+                                checkboxes.forEach(cb => {
+                                    if (!cb.checked) cb.click();
+                                });
+                            });
+                            await sleep(500);
+
+                            const lanjutBtn = await findButtonByKeywords(page, ['SELANJUTNYA', 'LANJUTKAN']);
+                            if (lanjutBtn) {
+                                await lanjutBtn.click();
+                                await sleep(2000);
+                            }
+
+                            // Re-evaluate state
+                            let newState = null;
+                            for (let attempt = 0; attempt < 15; attempt++) {
+                                const pageData = await page.evaluate(() => {
+                                    const txt = document.body.textContent.toLowerCase();
+                                    if (txt.includes('data pelanggan belum lengkap') || txt.includes('lengkapi data dahulu')) {
+                                        return { state: 'incomplete_data' };
+                                    }
+                                    if (txt.includes('berhasil diperbarui')) {
+                                        return { state: 'success_modal' };
+                                    }
+                                    if (txt.includes('pilihan jenis pelanggan') || txt.includes('pelanggan terdaftar')) {
+                                        return { state: 'modal' };
+                                    }
+                                    if (txt.includes('melebihi batas kewajaran') || txt.includes('batas kewajaran')) {
+                                        return { state: 'limit' };
+                                    }
+                                    const hasCekPesanan = txt.includes('cek pesanan') || txt.includes('jumlah produk');
+                                    if (hasCekPesanan) return { state: 'ready' };
+                                    return { state: 'waiting' };
+                                });
+                                if (pageData.state !== 'waiting') {
+                                    newState = pageData.state;
+                                    break;
+                                }
+                                await sleep(500);
+                            }
+                            if (newState) searchState = newState;
+                            continue; // Re-evaluate loop
+                        } 
+                        
+                        if (searchState === 'success_modal') {
+                            console.log('Mendeteksi popup sukses update data...');
+                            const lanjutTrxBtn = await findButtonByKeywords(page, ['LANJUTKAN KE TRANSAKSI']);
+                            if (lanjutTrxBtn) {
+                                await lanjutTrxBtn.click();
+                                await sleep(2000);
+                            }
+                            
+                            // Re-evaluate state
+                            let newState = null;
+                            for (let attempt = 0; attempt < 15; attempt++) {
+                                const pageData = await page.evaluate(() => {
+                                    const txt = document.body.textContent.toLowerCase();
+                                    if (txt.includes('pernyataan persetujuan') || txt.includes('saya telah membaca')) {
+                                        return { state: 'pernyataan' };
+                                    }
+                                    if (txt.includes('pilihan jenis pelanggan') || txt.includes('pelanggan terdaftar')) {
+                                        return { state: 'modal' };
+                                    }
+                                    if (txt.includes('melebihi batas kewajaran') || txt.includes('batas kewajaran')) {
+                                        return { state: 'limit' };
+                                    }
+                                    const hasCekPesanan = txt.includes('cek pesanan') || txt.includes('jumlah produk');
+                                    if (hasCekPesanan) return { state: 'ready' };
+                                    return { state: 'waiting' };
+                                });
+                                if (pageData.state !== 'waiting') {
+                                    newState = pageData.state;
+                                    break;
+                                }
+                                await sleep(500);
+                            }
+                            if (newState) searchState = newState;
+                            continue;
+                        }
+
+                        if (searchState === 'incomplete_data') {
+                            console.log('Mendeteksi Data Pelanggan Belum Lengkap. Membuka form Update Data...');
+                            
+                            const updateBtn = await findButtonByKeywords(page, ['UPDATE DATA PELANGGAN']);
+                            if (updateBtn) {
+                                await updateBtn.click();
+                                await sleep(2000);
+                            }
+
+                            console.log('Mengisi Tempat dan Tanggal Lahir...');
+                            
+                            // Tempat Lahir
+                            let tempatLahirInput = await page.$('input[placeholder*="tempat lahir" i]');
+                            if (!tempatLahirInput) {
+                                tempatLahirInput = await findInputByKeywords(page, ['tempat lahir']);
+                            }
+                            if (tempatLahirInput) {
+                                await tempatLahirInput.click({ clickCount: 3 });
+                                await page.keyboard.press('Backspace');
+                                await sleep(200);
+                                // Prioritaskan tempat_lahir dari database, lalu tebakan kabupaten
+                                let tempatLahirVal = trx.tempat_lahir || trx.kabupaten_kota;
+                                if (!tempatLahirVal && trx.nik && trx.nik.length === 16) {
+                                    const kode = trx.nik.substring(0, 4);
+                                    const mapKab = {
+                                        '5101': 'JEMBRANA', '5102': 'TABANAN', '5103': 'BADUNG', 
+                                        '5104': 'GIANYAR', '5105': 'KLUNGKUNG', '5106': 'BANGLI', 
+                                        '5107': 'KARANGASEM', '5108': 'BULELENG', '5171': 'DENPASAR'
+                                    };
+                                    tempatLahirVal = mapKab[kode] || 'DENPASAR';
+                                }
+                                tempatLahirVal = tempatLahirVal || 'KABUPATEN';
+                                const cleanTempat = tempatLahirVal.replace(/^(KAB\.|KOTA|KEC\.|KECAMATAN|DESA|KEL\.|KELURAHAN)\s+/i, '');
+                                
+                                // Set value directly then simulate typing
+                                await page.evaluate((el, val) => {
+                                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                                    nativeInputValueSetter.call(el, val);
+                                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                                }, tempatLahirInput, cleanTempat);
+                                
+                                await tempatLahirInput.type(' ', { delay: 60 }); // Trigger react keystroke if needed
+                                await page.keyboard.press('Backspace');
+                            }
+
+                            // DUMP HTML UNTUK DEBUGGING DROPDOWN
+                            const htmlDump = await page.evaluate(() => document.body.innerHTML);
+                            const fs = require('fs');
+                            fs.writeFileSync('update_data_form.html', htmlDump);
+                            console.log('📄 HTML form Update Data berhasil di-dump ke update_data_form.html');
+
+                            // Tanggal Lahir
+                            let tglLahir = trx.tanggal_lahir;
+                            if (!tglLahir && trx.nik && trx.nik.length === 16) {
+                                // Ekstrak dari NIK: Prop(2) Kab(2) Kec(2) Tgl(2) Bln(2) Thn(2)
+                                let tgl = parseInt(trx.nik.substring(6, 8), 10);
+                                const bln = trx.nik.substring(8, 10);
+                                let thn = parseInt(trx.nik.substring(10, 12), 10);
+                                
+                                // Jika wanita, tanggal + 40
+                                if (tgl > 40) tgl -= 40;
+                                
+                                // Asumsi abad (kurang dari tahun saat ini = 2000an, lebih = 1900an)
+                                const currentYear2Digit = new Date().getFullYear() % 100;
+                                if (thn > currentYear2Digit) {
+                                    thn += 1900;
+                                } else {
+                                    thn += 2000;
+                                }
+                                
+                                const tglStr = tgl.toString().padStart(2, '0');
+                                tglLahir = `${thn}-${bln}-${tglStr}`;
+                                console.log(`[NIK Parser] Menebak tanggal lahir dari NIK: ${tglLahir}`);
+                            }
+
+                            if (tglLahir) { 
+                                const [tahun, bulanStr, tanggal] = tglLahir.split('-');
+                                const tglNum = parseInt(tanggal, 10).toString();
+                                const bulanNama = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+                                const blnIdx = parseInt(bulanStr, 10) - 1;
+                                const blnTxt = bulanNama[blnIdx];
+
+                                // Mantine UI Custom Dropdown Interaction
+                                const clickMantineSelect = async (placeholder, matchText) => {
+                                    const inputs = await page.$$(`input[placeholder="${placeholder}"]`);
+                                    if (inputs.length > 0) {
+                                        await inputs[0].click();
+                                        await sleep(500); // wait for dropdown animation
+                                        
+                                        const options = await page.$$('div[role="option"]');
+                                        for (const opt of options) {
+                                            const text = await page.evaluate(el => (el.textContent || '').trim().toLowerCase(), opt);
+                                            const matchLower = matchText.toLowerCase();
+                                            if (text === matchLower || text.includes(matchLower)) {
+                                                await opt.click();
+                                                await sleep(400);
+                                                return;
+                                            }
+                                        }
+                                        // Click outside or Escape if not found to close dropdown
+                                        await page.keyboard.press('Escape');
+                                        await sleep(300);
+                                    }
+                                };
+
+                                await clickMantineSelect('Tgl', tglNum);
+                                await clickMantineSelect('Bln', blnTxt);
+                                await clickMantineSelect('Thn', tahun);
+                            }
+                            await sleep(1000);
+
+                            const nextBtn = await findButtonByKeywords(page, ['SELANJUTNYA', 'SIMPAN']);
+                            if (nextBtn) {
+                                await nextBtn.click();
+                                await sleep(2000);
+                            }
+
+                            const perbaruiBtn = await findButtonByKeywords(page, ['YA, PERBARUI DATA', 'YA', 'PERBARUI']);
+                            if (perbaruiBtn) {
+                                await perbaruiBtn.click();
+                                await sleep(2000);
+                            }
+                            
+                            // Re-evaluate state
+                            let newState = null;
+                            for (let attempt = 0; attempt < 15; attempt++) {
+                                const pageData = await page.evaluate(() => {
+                                    const txt = document.body.textContent.toLowerCase();
+                                    if (txt.includes('berhasil diperbarui')) {
+                                        return { state: 'success_modal' };
+                                    }
+                                    if (txt.includes('pernyataan persetujuan') || txt.includes('saya telah membaca')) {
+                                        return { state: 'pernyataan' };
+                                    }
+                                    if (txt.includes('pilihan jenis pelanggan') || txt.includes('pelanggan terdaftar')) {
+                                        return { state: 'modal' };
+                                    }
+                                    if (txt.includes('melebihi batas kewajaran') || txt.includes('batas kewajaran')) {
+                                        return { state: 'limit' };
+                                    }
+                                    const hasCekPesanan = txt.includes('cek pesanan') || txt.includes('jumlah produk');
+                                    if (hasCekPesanan) return { state: 'ready' };
+                                    return { state: 'waiting' };
+                                });
+                                if (pageData.state !== 'waiting') {
+                                    newState = pageData.state;
+                                    break;
+                                }
+                                await sleep(500);
+                            }
+                            if (newState) searchState = newState;
+                            if (searchState === 'incomplete_data') {
+                                await page.screenshot({ path: `debug-incomplete-${trx.nik}-${Date.now()}.png` });
+                                console.log('📸 Screenshot gagal update form disimpan.');
+                            }
+                            continue; // Re-evaluate loop
+                        }
+
+                        // If not pernyataan, incomplete_data, or success_modal, break out of loop to process modal/ready
+                        resolvingPreStates = false;
                     }
 
                     // --- STATE C: MODAL PEMILIHAN JENIS PELANGGAN ---
@@ -1790,6 +2053,8 @@ async function run() {
                                     const pageUrl = page.url().toLowerCase();
                                     if (pageUrl.includes('/login') || pageText.includes('masuk ke akun') || pageText.includes('selamat datang')) {
                                         throw new Error('Sesi login berakhir saat memproses transaksi.');
+                                    } else if (pageText.includes('stok tabung kosong') || pageText.includes('stok tabung yang dapat dijual kosong') || pageText.includes('lakukan penebusan')) {
+                                        throw new Error('FATAL: STOK_MYPERTAMINA_KOSONG');
                                     } else if (pageText.includes('gagal') || pageText.includes('error') || pageText.includes('kesalahan') || pageText.includes('tidak berhasil')) {
                                         throw new Error('Transaksi gagal diproses oleh portal Pertamina (Terdeteksi error/kegagalan pada halaman).');
                                     } else {
@@ -1873,8 +2138,15 @@ async function run() {
                     }
 
                     if (err.message.includes('STOK_MYPERTAMINA_KOSONG')) {
+                        console.log('Menerima sinyal Stok Kosong. Melaporkan ke database dan membatalkan sisa antrean pangkalan ini...');
                         pangkalanStokHabis = true;
                         if (!pangkalanHabisList.includes(merchantName)) pangkalanHabisList.push(merchantName);
+                        try {
+                            await api.post('/api/rpa-sync/stok-kosong', {
+                                sync_id: syncId,
+                                message: 'Stok tabung LPG 3kg habis di pangkalan. Harap lakukan penebusan (Beli stok) ke Agen.'
+                            });
+                        } catch (e) {}
                     } else if (err.message.includes('FATAL_LIMIT_EXCEEDED')) {
                         console.log('⚠️ Pelanggan melebihi batas kewajaran pembelian (Limit Habis Nasional). Melaporkan ke database...');
                         limitCount++;
@@ -2012,6 +2284,10 @@ async function run() {
 
     } catch (error) {
         console.error('\n✗ Terjadi Kesalahan Utama pada Bot:', error.message);
+        if (activeBrowser) {
+            try { await activeBrowser.close(); } catch (e) {}
+            activeBrowser = null;
+        }
         if (activeSyncId) {
             await api.patch(`/api/rpa-sync/${activeSyncId}`, {
                 status: 'failed',

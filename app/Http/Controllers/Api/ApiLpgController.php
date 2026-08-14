@@ -139,6 +139,9 @@ class ApiLpgController extends Controller
                     'nik'               => $t->pelanggan->nik,
                     'jumlah_tabung'     => $t->jumlah_tabung,
                     'tanggal_transaksi' => $t->tanggal_transaksi->format('Y-m-d'),
+                    'tempat_lahir'      => $t->pelanggan->tempat_lahir,
+                    'tanggal_lahir'     => $t->pelanggan->tanggal_lahir,
+                    'kabupaten_kota'    => $t->pelanggan->kabupaten_kota,
                     'dilaporkan'        => false,
                 ];
             })

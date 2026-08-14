@@ -19,6 +19,16 @@
           </a>
 
           <button
+            @click="syncAll"
+            class="inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-650 transition-all duration-200 active:scale-[0.98] shadow-sm"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Sync Semua NIK</span>
+          </button>
+
+          <button
             @click="openImportModal"
             class="inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-650 transition-all duration-200 active:scale-[0.98] shadow-sm"
           >
@@ -98,6 +108,8 @@
             <thead>
               <tr class="border-b border-slate-200 text-xs text-slate-400 uppercase font-bold tracking-wider">
                 <th class="py-3 px-4">NIK</th>
+                <th class="py-3 px-4">Detail Identitas</th>
+                <th class="py-3 px-4">Domisili</th>
                 <th class="py-3 px-4 text-center">Status</th>
                 <th class="py-3 px-4 text-center">Terpakai Bulan Ini</th>
                 <th class="py-3 px-4 text-right">Aksi</th>
@@ -119,6 +131,26 @@
                       </svg>
                     </button>
                   </div>
+                </td>
+                <!-- Detail Identitas -->
+                <td class="py-3.5 px-4 text-xs">
+                  <template v-if="pelanggan.is_synced">
+                    <div class="font-medium text-slate-800">{{ pelanggan.jenis_kelamin || '-' }}</div>
+                    <div class="text-slate-500">{{ (pelanggan.tempat_lahir || pelanggan.kabupaten_kota || '-').replace(/^(KAB\.|KOTA|KEC\.|KECAMATAN|DESA|KEL\.|KELURAHAN)\s+/i, '') }}, {{ pelanggan.tanggal_lahir || '-' }}</div>
+                  </template>
+                  <template v-else>
+                    <span class="text-slate-400 italic text-[11px]">Belum disinkronisasi</span>
+                  </template>
+                </td>
+                <!-- Domisili -->
+                <td class="py-3.5 px-4 text-xs">
+                  <template v-if="pelanggan.is_synced">
+                    <div class="font-medium text-slate-800">{{ (pelanggan.kabupaten_kota || '-').replace(/^(KAB\.|KOTA)\s+/i, '') }}</div>
+                    <div class="text-slate-500">{{ (pelanggan.kecamatan || '-').replace(/^(KEC\.|KECAMATAN)\s+/i, '') }}, {{ pelanggan.provinsi || '-' }}</div>
+                  </template>
+                  <template v-else>
+                    <span class="text-slate-400 italic text-[11px]">Belum disinkronisasi</span>
+                  </template>
                 </td>
                 <!-- Status -->
                 <td class="py-3.5 px-4 text-center">
@@ -149,6 +181,15 @@
                 <td class="py-3.5 px-4 text-right">
                   <div class="inline-flex space-x-1">
                     <button
+                      @click="syncNik(pelanggan)"
+                      title="Sync Data NIK"
+                      class="p-2 rounded-lg bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-indigo-500 transition-all duration-200 shadow-sm"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </button>
+                    <button
                       @click="openEditModal(pelanggan)"
                       class="p-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-500 transition-all duration-200 shadow-sm"
                     >
@@ -168,7 +209,7 @@
                 </td>
               </tr>
               <tr v-if="localPelanggans.length === 0">
-                <td colspan="4" class="py-10 text-center text-xs text-slate-400 uppercase tracking-widest font-bold">
+                <td colspan="6" class="py-10 text-center text-xs text-slate-400 uppercase tracking-widest font-bold">
                   Tidak ada data pelanggan ditemukan
                 </td>
               </tr>
@@ -214,6 +255,21 @@
                 />
                 <p v-if="form.errors.nik" class="text-xs text-red-500 mt-1 font-medium">{{ form.errors.nik }}</p>
                 <p class="text-[11px] text-slate-500 mt-1 font-normal">Sisa karakter: {{ 16 - (form.nik ? form.nik.length : 0) }} digit</p>
+              </div>
+
+              <!-- Tempat Lahir -->
+              <div>
+                <label for="modal-tempat-lahir" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2">Tempat Lahir (Opsional)</label>
+                <input
+                  id="modal-tempat-lahir"
+                  v-model="form.tempat_lahir"
+                  type="text"
+                  placeholder="Bisa nama Kabupaten atau Desa (Contoh: Kapal)"
+                  class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 font-semibold placeholder-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-all duration-200"
+                  :class="{ 'border-red-500 bg-red-50/10': form.errors.tempat_lahir }"
+                />
+                <p v-if="form.errors.tempat_lahir" class="text-xs text-red-500 mt-1 font-medium">{{ form.errors.tempat_lahir }}</p>
+                <p class="text-[11px] text-slate-500 mt-1 font-normal">Isi secara manual jika NIK tidak terdeteksi benar</p>
               </div>
 
               <!-- Status -->
@@ -407,6 +463,7 @@ const maskNik = (nik) => {
 const form = useForm({
   nik: '',
   status: true,
+  tempat_lahir: '',
 });
 
 const importForm = useForm({
@@ -436,6 +493,7 @@ const openAddModal = () => {
   form.reset();
   form.clearErrors();
   form.status = true;
+  form.tempat_lahir = '';
   isEditing.value = false;
   showModal.value = true;
 };
@@ -444,6 +502,7 @@ const openEditModal = (pelanggan) => {
   form.clearErrors();
   form.nik = pelanggan.nik;
   form.status = pelanggan.status;
+  form.tempat_lahir = pelanggan.tempat_lahir || '';
   activePelanggan.value = pelanggan;
   isEditing.value = true;
   showModal.value = true;
@@ -480,6 +539,18 @@ const toggleStatus = (pelanggan) => {
 const submitImport = () => {
   importForm.post(route('pelanggan.import'), {
     onSuccess: () => showImportModal.value = false,
+  });
+};
+
+const syncNik = (pelanggan) => {
+  router.post(route('pelanggan.sync', pelanggan.id), {}, {
+    preserveScroll: true,
+  });
+};
+
+const syncAll = () => {
+  router.post(route('pelanggan.sync-all'), {}, {
+    preserveScroll: true,
   });
 };
 
