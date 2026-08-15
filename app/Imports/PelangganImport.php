@@ -24,6 +24,8 @@ class PelangganImport implements
 
     private ?int $nikColIndex = null;
     private ?int $statusColIndex = null;
+    private ?int $tempatLahirColIndex = null;
+    private ?int $tglLahirColIndex = null;
 
     public function __construct(?int $userId = null)
     {
@@ -43,29 +45,39 @@ class PelangganImport implements
                 
                 // 1. Cek apakah baris pertama ini langsung berisi DATA (mencari angka 16 digit)
                 foreach ($firstRow as $i => $val) {
-                    // Hanya ambil angkanya saja
                     $cleanVal = preg_replace('/[^0-9]/', '', (string)$val);
                     if (strlen($cleanVal) === 16) {
-                        // Ketemu 16 digit angka! Berarti baris pertama ini langsung DATA, bukan judul
                         $this->nikColIndex = $i;
-                        // Asumsikan kolom status ada di kolom sebelahnya
                         $this->statusColIndex = ($i === 0) ? 1 : 0;
+                        if (isset($firstRow[$i + 2])) $this->tempatLahirColIndex = $i + 2;
+                        if (isset($firstRow[$i + 3])) $this->tglLahirColIndex = $i + 3;
                         $isHeaderRow = false;
                         break;
                     }
                 }
                 
                 // 2. Jika tidak ada angka 16 digit, kita anggap itu JUDUL (atau baris invalid/typo)
-                // Kita coba tebak posisi kolomnya dari teks judul (kebal typo)
                 if ($isHeaderRow) {
                     $nikFound = false;
                     $statusFound = false;
+                    $tempatLahirFound = false;
+                    $tglLahirFound = false;
                     
                     foreach ($firstRow as $i => $val) {
                         $valStr = strtolower(trim((string)$val));
                         
+                        // Deteksi kolom Tempat Lahir
+                        if (!$tempatLahirFound && (str_contains($valStr, 'tempat') || str_contains($valStr, 'tmp') || $valStr === 'kota lahir')) {
+                            $this->tempatLahirColIndex = $i;
+                            $tempatLahirFound = true;
+                        }
+                        // Deteksi kolom Tanggal Lahir
+                        elseif (!$tglLahirFound && (str_contains($valStr, 'tgl') || str_contains($valStr, 'tanggal') || str_contains($valStr, 'lahir'))) {
+                            $this->tglLahirColIndex = $i;
+                            $tglLahirFound = true;
+                        }
                         // Deteksi kolom NIK (bisa typo jadi 'nki', 'no ktp', 'nomor', 'id', dll)
-                        if (!$nikFound && (str_contains($valStr, 'nik') || str_contains($valStr, 'nki') || str_contains($valStr, 'ktp') || str_contains($valStr, 'nomor') || str_contains($valStr, 'no'))) {
+                        elseif (!$nikFound && (str_contains($valStr, 'nik') || str_contains($valStr, 'nki') || str_contains($valStr, 'ktp') || str_contains($valStr, 'nomor') || str_contains($valStr, 'no'))) {
                             $this->nikColIndex = $i;
                             $nikFound = true;
                         }
@@ -120,6 +132,36 @@ class PelangganImport implements
                 continue;
             }
 
+            $updateData = ['status' => $status];
+            
+            if ($this->tempatLahirColIndex !== null && isset($row[$this->tempatLahirColIndex])) {
+                $tempat = trim((string)$row[$this->tempatLahirColIndex]);
+                if ($tempat !== '') {
+                    $updateData['tempat_lahir'] = $tempat;
+                }
+            }
+
+            if ($this->tglLahirColIndex !== null && isset($row[$this->tglLahirColIndex])) {
+                $tglInput = $row[$this->tglLahirColIndex];
+                if ($tglInput !== null && trim((string)$tglInput) !== '') {
+                    if (is_numeric($tglInput)) {
+                        try {
+                            $updateData['tanggal_lahir'] = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($tglInput)->format('Y-m-d');
+                        } catch (\Exception $e) {}
+                    } else {
+                        try {
+                            $tglStr = str_replace('/', '-', trim((string)$tglInput));
+                            $parsedDate = strtotime($tglStr);
+                            if ($parsedDate !== false) {
+                                $updateData['tanggal_lahir'] = date('Y-m-d', $parsedDate);
+                            } else {
+                                $updateData['tanggal_lahir'] = trim((string)$tglInput);
+                            }
+                        } catch (\Exception $e) {}
+                    }
+                }
+            }
+
             $bindex = hash_hmac('sha256', $nik, config('app.key'));
             $existing = Pelanggan::where('nik_bindex', $bindex)->first();
 
@@ -130,15 +172,16 @@ class PelangganImport implements
                     continue;
                 }
                 
-                // Jika NIK milik user ini, update statusnya sesuai Excel
-                $existing->update(['status' => $status]);
+                // Jika NIK milik user ini, update status dan data lahir
+                $existing->update($updateData);
             } else {
                 // Jika NIK baru, buat baru
-                Pelanggan::create([
+                $createData = [
                     'nik' => $nik,
-                    'status' => $status,
                     'user_id' => $this->userId,
-                ]);
+                ];
+                $createData = array_merge($createData, $updateData);
+                Pelanggan::create($createData);
             }
 
             $this->imported++;
