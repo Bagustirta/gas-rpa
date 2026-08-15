@@ -1040,9 +1040,9 @@ async function run() {
 
             // 4. Buka Browser (Headless: false agar terlihat layarnya)
 
-            console.log('Membuka browser otomatis (Mode Headless/Latar Belakang)...');
+            console.log('Membuka browser otomatis (Mode Tampil/UI)...');
             const browser = await puppeteer.launch({
-                headless: 'new', // Berjalan secara tak terlihat
+                headless: false, // Berjalan secara terlihat (menampilkan Chrome)
                 defaultViewport: { width: 1366, height: 768 }, // Paksa ukuran layar desktop agar tidak jadi tampilan HP
                 args: ['--window-size=1366,768', '--start-maximized', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
             });
@@ -1340,6 +1340,14 @@ async function run() {
             let waitingAttempts = 0;
             while (!isInputPageReady && waitingAttempts < 10) {
                 try {
+                    const isStokKosongPopup = await page.evaluate(() => {
+                        const txt = document.body.textContent.toLowerCase();
+                        return txt.includes('stok tabung kosong') || txt.includes('stok tabung yang dapat dijual kosong');
+                    });
+                    if (isStokKosongPopup) {
+                        throw new Error('FATAL: STOK_MYPERTAMINA_KOSONG');
+                    }
+
                     isInputPageReady = await page.evaluate(() => {
                         const inputs = Array.from(document.querySelectorAll('input'));
                         return inputs.some(input => {
@@ -1441,42 +1449,74 @@ async function run() {
 
                     // Pastikan modal "Catat Penjualan" terbuka jika kita berada di dashboard
                     try {
-                        const currentUrl = page.url();
-                        if (currentUrl.includes('/merchant/app') || currentUrl.includes('/merchant/dashboard')) {
-                            let nikInputExist = await page.evaluate(() => {
-                                const txt = document.body.textContent.toLowerCase();
-                                const hasModalText = txt.includes('masukkan nik') || txt.includes('16 digit');
-                                const inputs = Array.from(document.querySelectorAll('input'));
-                                const hasVisibleInput = inputs.some(input => {
-                                    const rect = input.getBoundingClientRect();
-                                    return rect.width > 0 && rect.height > 0;
+                        let retryOpenModal = 0;
+                        let opened = false;
+                        while (!opened && retryOpenModal < 3) {
+                            retryOpenModal++;
+                            const currentUrl = page.url();
+                            if (currentUrl.includes('/merchant/app') || currentUrl.includes('/merchant/dashboard')) {
+                                let nikInputExist = await page.evaluate(() => {
+                                    const txt = document.body.textContent.toLowerCase();
+                                    const hasModalText = txt.includes('masukkan nik') || txt.includes('16 digit');
+                                    const inputs = Array.from(document.querySelectorAll('input'));
+                                    const hasVisibleInput = inputs.some(input => {
+                                        const rect = input.getBoundingClientRect();
+                                        return rect.width > 0 && rect.height > 0;
+                                    });
+                                    return hasModalText && hasVisibleInput;
                                 });
-                                return hasModalText && hasVisibleInput;
-                            });
 
-                            if (!nikInputExist) {
-                                console.log('Membuka kembali modal "Catat Penjualan"...');
-                                const catatPenjualanBtn = await findButtonByKeywords(page, ['Catat Penjualan']);
-                                if (catatPenjualanBtn) {
-                                    await catatPenjualanBtn.click();
-
-                                    let opened = false;
-                                    for (let w = 0; w < 10; w++) {
-                                        opened = await page.evaluate(() => {
-                                            const inputs = Array.from(document.querySelectorAll('input'));
-                                            return inputs.some(input => {
-                                                const rect = input.getBoundingClientRect();
-                                                return rect.width > 0 && rect.height > 0 &&
-                                                    (input.getAttribute('placeholder') || '').toLowerCase().includes('nik');
-                                            });
-                                        });
-                                        if (opened) break;
-                                        await sleep(500);
+                                if (!nikInputExist) {
+                                    if (retryOpenModal === 1) {
+                                        console.log('Membuka kembali modal "Catat Penjualan"...');
+                                    } else {
+                                        console.log(`🔄 [Self-Healing ${retryOpenModal-1}/2] Mencoba kembali menekan tombol "Catat Penjualan"...`);
                                     }
+                                    
+                                    const catatPenjualanBtn = await findButtonByKeywords(page, ['Catat Penjualan']);
+                                    if (catatPenjualanBtn) {
+                                        await catatPenjualanBtn.click();
+
+                                        for (let w = 0; w < 20; w++) {
+                                            const isStokKosongPopup = await page.evaluate(() => {
+                                                const txt = document.body.textContent.toLowerCase();
+                                                return txt.includes('stok tabung kosong') || txt.includes('stok tabung yang dapat dijual kosong');
+                                            });
+                                            if (isStokKosongPopup) {
+                                                throw new Error('FATAL: STOK_MYPERTAMINA_KOSONG');
+                                            }
+
+                                            opened = await page.evaluate(() => {
+                                                const inputs = Array.from(document.querySelectorAll('input'));
+                                                return inputs.some(input => {
+                                                    const rect = input.getBoundingClientRect();
+                                                    return rect.width > 0 && rect.height > 0 && 
+                                                        !input.readOnly && !input.disabled;
+                                                });
+                                            });
+                                            if (opened) break;
+                                            await sleep(500);
+                                        }
+
+                                        if (!opened && retryOpenModal < 3) {
+                                            console.log(`⚠️ Kolom NIK lambat/tidak muncul (Percobaan ${retryOpenModal}/3). Melakukan refresh halaman...`);
+                                            await page.reload({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => null);
+                                            await sleep(3000);
+                                            continue; // Coba loop sekali lagi
+                                        }
+                                    }
+                                } else {
+                                    opened = true;
                                 }
+                            } else {
+                                opened = true; // Bukan di dashboard, mungkin di URL lain
                             }
                         }
-                    } catch (e) { }
+                    } catch (e) {
+                        if (e.message && e.message.includes('STOK_MYPERTAMINA_KOSONG')) {
+                            throw e;
+                        }
+                    }
 
                     // Input NIK
                     console.log('Menginput NIK...');
@@ -1495,7 +1535,7 @@ async function run() {
                     }
 
                     if (!nikInput) {
-                        throw new Error('Kolom input NIK tidak ditemukan.');
+                        throw new Error('Gagal menemukan kotak isian nomor identitas di halaman web.');
                     }
 
                     await nikInput.click({ clickCount: 3 });
@@ -1542,6 +1582,7 @@ async function run() {
 
                             const isStokKosong = txt.includes('stok tabung yang dapat dijual kosong') ||
                                 txt.includes('stok kosong') ||
+                                txt.includes('stok habis') ||
                                 txt.includes('lakukan penebusan');
                             if (isStokKosong) {
                                 return { state: 'stok_kosong' };
@@ -1606,6 +1647,7 @@ async function run() {
                     }
 
                     if (!searchState) {
+                        await page.screenshot({ path: `debug-timeout-nik-${trx.nik}-${Date.now()}.png` });
                         throw new Error('Pencarian NIK timeout atau tidak merespon.');
                     }
 
@@ -1672,7 +1714,7 @@ async function run() {
                     // --- HANDLE DYNAMIC PRE-STATES (Pernyataan & Incomplete Data) ---
                     let resolvingPreStates = true;
                     let resolveAttempts = 0;
-                    while (resolvingPreStates && resolveAttempts < 5) {
+                    while (resolvingPreStates && resolveAttempts < 10) {
                         resolveAttempts++;
                         
                         if (searchState === 'pernyataan') {
@@ -1780,30 +1822,17 @@ async function run() {
                                 await tempatLahirInput.click({ clickCount: 3 });
                                 await page.keyboard.press('Backspace');
                                 await sleep(200);
-                                // Prioritaskan tempat_lahir dari database, lalu tebakan kabupaten
-                                let tempatLahirVal = trx.tempat_lahir || trx.kabupaten_kota;
-                                if (!tempatLahirVal && trx.nik && trx.nik.length === 16) {
-                                    const kode = trx.nik.substring(0, 4);
-                                    const mapKab = {
-                                        '5101': 'JEMBRANA', '5102': 'TABANAN', '5103': 'BADUNG', 
-                                        '5104': 'GIANYAR', '5105': 'KLUNGKUNG', '5106': 'BANGLI', 
-                                        '5107': 'KARANGASEM', '5108': 'BULELENG', '5171': 'DENPASAR'
-                                    };
-                                    tempatLahirVal = mapKab[kode] || 'DENPASAR';
+                                // Prioritaskan tempat_lahir dari database
+                                let tempatLahirVal = trx.tempat_lahir || trx.kabupaten_kota || '';
+                                const cleanTempat = tempatLahirVal.replace(/^(KAB\.|KB\.|KABUPATEN|KOTA|KEC\.|KECAMATAN|DESA|KEL\.|KELURAHAN)\s*/i, '');
+                                
+                                // Gunakan Puppeteer type agar React/Mantine mendeteksi perubahan
+                                if (cleanTempat) {
+                                    await tempatLahirInput.type(cleanTempat, { delay: 30 });
+                                } else {
+                                    await tempatLahirInput.type('-', { delay: 30 });
                                 }
-                                tempatLahirVal = tempatLahirVal || 'KABUPATEN';
-                                const cleanTempat = tempatLahirVal.replace(/^(KAB\.|KOTA|KEC\.|KECAMATAN|DESA|KEL\.|KELURAHAN)\s+/i, '');
-                                
-                                // Set value directly then simulate typing
-                                await page.evaluate((el, val) => {
-                                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-                                    nativeInputValueSetter.call(el, val);
-                                    el.dispatchEvent(new Event('input', { bubbles: true }));
-                                    el.dispatchEvent(new Event('change', { bubbles: true }));
-                                }, tempatLahirInput, cleanTempat);
-                                
-                                await tempatLahirInput.type(' ', { delay: 60 }); // Trigger react keystroke if needed
-                                await page.keyboard.press('Backspace');
+                                await sleep(300);
                             }
 
                             // DUMP HTML UNTUK DEBUGGING DROPDOWN
@@ -1814,26 +1843,10 @@ async function run() {
 
                             // Tanggal Lahir
                             let tglLahir = trx.tanggal_lahir;
-                            if (!tglLahir && trx.nik && trx.nik.length === 16) {
-                                // Ekstrak dari NIK: Prop(2) Kab(2) Kec(2) Tgl(2) Bln(2) Thn(2)
-                                let tgl = parseInt(trx.nik.substring(6, 8), 10);
-                                const bln = trx.nik.substring(8, 10);
-                                let thn = parseInt(trx.nik.substring(10, 12), 10);
-                                
-                                // Jika wanita, tanggal + 40
-                                if (tgl > 40) tgl -= 40;
-                                
-                                // Asumsi abad (kurang dari tahun saat ini = 2000an, lebih = 1900an)
-                                const currentYear2Digit = new Date().getFullYear() % 100;
-                                if (thn > currentYear2Digit) {
-                                    thn += 1900;
-                                } else {
-                                    thn += 2000;
-                                }
-                                
-                                const tglStr = tgl.toString().padStart(2, '0');
-                                tglLahir = `${thn}-${bln}-${tglStr}`;
-                                console.log(`[NIK Parser] Menebak tanggal lahir dari NIK: ${tglLahir}`);
+                            
+                            // Berikan tanggal default jika kosong di database karena field ini wajib
+                            if (!tglLahir || tglLahir === '-') {
+                                tglLahir = '1970-01-01';
                             }
 
                             if (tglLahir) { 
@@ -1847,15 +1860,45 @@ async function run() {
                                 const clickMantineSelect = async (placeholder, matchText) => {
                                     const inputs = await page.$$(`input[placeholder="${placeholder}"]`);
                                     if (inputs.length > 0) {
-                                        await inputs[0].click();
-                                        await sleep(500); // wait for dropdown animation
+                                        // Gunakan Puppeteer click() asli agar React mendeteksi interaksi
+                                        try {
+                                            await inputs[0].click({ delay: 50 });
+                                        } catch (err) {
+                                            await page.evaluate(el => {
+                                                el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+                                                el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                                                el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+                                                el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                                                el.click();
+                                            }, inputs[0]);
+                                        }
+                                        await sleep(800); // wait for dropdown animation
                                         
-                                        const options = await page.$$('div[role="option"]');
+                                        const options = await page.$$('div[role="option"], .mantine-Select-item, .mantine-Select-option, [data-combobox-option]');
                                         for (const opt of options) {
                                             const text = await page.evaluate(el => (el.textContent || '').trim().toLowerCase(), opt);
                                             const matchLower = matchText.toLowerCase();
-                                            if (text === matchLower || text.includes(matchLower)) {
-                                                await opt.click();
+                                            
+                                            let matched = false;
+                                            if (text === matchLower) {
+                                                matched = true;
+                                            } else if (placeholder === 'Tgl' || placeholder === 'Thn') {
+                                                if (parseInt(text, 10) === parseInt(matchLower, 10)) {
+                                                    matched = true;
+                                                }
+                                            } else if (text.includes(matchLower) && placeholder === 'Bln') {
+                                                matched = true;
+                                            }
+
+                                            if (matched) {
+                                                await page.evaluate(el => {
+                                                    el.scrollIntoView({ behavior: 'instant', block: 'center' });
+                                                    el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+                                                    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                                                    el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+                                                    el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                                                    el.click();
+                                                }, opt);
                                                 await sleep(400);
                                                 return;
                                             }
@@ -1866,22 +1909,61 @@ async function run() {
                                     }
                                 };
 
-                                await clickMantineSelect('Tgl', tglNum);
-                                await clickMantineSelect('Bln', blnTxt);
-                                await clickMantineSelect('Thn', tahun);
-                            }
-                            await sleep(1000);
+                                let isFormValid = false;
+                                for (let formRetry = 0; formRetry < 3; formRetry++) {
+                                    await clickMantineSelect('Tgl', tglNum);
+                                    await clickMantineSelect('Bln', blnTxt);
+                                    await clickMantineSelect('Thn', tahun);
+                                    
+                                    await sleep(1000);
 
-                            const nextBtn = await findButtonByKeywords(page, ['SELANJUTNYA', 'SIMPAN']);
-                            if (nextBtn) {
-                                await nextBtn.click();
-                                await sleep(2000);
-                            }
+                                    const nextBtn = await findButtonByKeywords(page, ['SELANJUTNYA', 'SIMPAN']);
+                                    if (nextBtn) {
+                                        await nextBtn.click();
+                                        await sleep(2000);
+                                    }
 
-                            const perbaruiBtn = await findButtonByKeywords(page, ['YA, PERBARUI DATA', 'YA', 'PERBARUI']);
-                            if (perbaruiBtn) {
-                                await perbaruiBtn.click();
-                                await sleep(2000);
+                                    const perbaruiBtn = await findButtonByKeywords(page, ['YA, PERBARUI DATA', 'YA', 'PERBARUI']);
+                                    if (perbaruiBtn) {
+                                        await perbaruiBtn.click();
+                                        await sleep(2000);
+                                    }
+                                    
+                                    const validationStatus = await page.evaluate(() => {
+                                        const txt = document.body.textContent.toLowerCase();
+                                        if (txt.includes('berhasil diperbarui')) {
+                                            return 'success'; // Sukses, popup muncul
+                                        }
+                                        if (txt.includes('wajib diisi')) {
+                                            return 'error'; // Ada error validasi
+                                        }
+                                        return 'unknown';
+                                    });
+                                    
+                                    if (validationStatus === 'success' || validationStatus === 'unknown') {
+                                        isFormValid = true;
+                                        break;
+                                    } else {
+                                        console.log(`[Self-Healing ${formRetry + 1}/3] Terdeteksi pesan "Wajib diisi". Bot mencoba mengisi ulang form...`);
+                                        await sleep(1500);
+                                    }
+                                }
+                                
+                                if (!isFormValid) {
+                                    console.log('Peringatan: Bot gagal menembus form update data setelah 3x percobaan karena validasi Wajib Diisi.');
+                                }
+                            } else {
+                                await sleep(1000);
+                                const nextBtn = await findButtonByKeywords(page, ['SELANJUTNYA', 'SIMPAN']);
+                                if (nextBtn) {
+                                    await nextBtn.click();
+                                    await sleep(2000);
+                                }
+                                const perbaruiBtn = await findButtonByKeywords(page, ['YA, PERBARUI DATA', 'YA', 'PERBARUI']);
+                                if (perbaruiBtn) {
+                                    await perbaruiBtn.click();
+                                    await sleep(2000);
+                                }
                             }
                             
                             // Re-evaluate state
@@ -1919,51 +2001,75 @@ async function run() {
                             continue; // Re-evaluate loop
                         }
 
-                        // If not pernyataan, incomplete_data, or success_modal, break out of loop to process modal/ready
+                        if (searchState === 'modal') {
+                            console.log('Mendeteksi modal pemilihan jenis pelanggan. Memilih "Rumah Tangga"...');
+                            const rumahTanggaOpt = await findButtonByKeywords(page, ['Rumah Tangga']);
+                            if (rumahTanggaOpt) {
+                                await rumahTanggaOpt.click();
+                                await sleep(500);
+                            }
+
+                            const lanjutkanBtn = await findButtonByKeywords(page, ['LANJUTKAN PENJUALAN', 'LANJUTKAN TRANSAKSI']);
+                            if (lanjutkanBtn) {
+                                await lanjutkanBtn.click();
+                                await sleep(1500);
+                            }
+
+                            // Re-evaluate state
+                            let newState = null;
+                            for (let attempt = 0; attempt < 20; attempt++) {
+                                const pageData = await page.evaluate(() => {
+                                    const txt = document.body.textContent.toLowerCase();
+                                    if (txt.includes('pernyataan persetujuan') || txt.includes('saya telah membaca')) {
+                                        return { state: 'pernyataan' };
+                                    }
+                                    if (txt.includes('data pelanggan belum lengkap') || txt.includes('lengkapi data dahulu')) {
+                                        return { state: 'incomplete_data' };
+                                    }
+                                    if (txt.includes('melebihi batas kewajaran') || txt.includes('batas kewajaran')) {
+                                        return { state: 'limit' };
+                                    }
+                                    if (txt.includes('stok tabung kosong') || txt.includes('stok tabung yang dapat dijual kosong')) {
+                                        return { state: 'stok_kosong' };
+                                    }
+                                    const hasCekPesanan = txt.includes('cek pesanan') || txt.includes('jumlah produk');
+                                    if (hasCekPesanan) return { state: 'ready' };
+                                    return { state: 'waiting' };
+                                });
+
+                                if (pageData.state === 'stok_kosong') {
+                                    throw new Error('FATAL: STOK_MYPERTAMINA_KOSONG');
+                                }
+
+                                if (pageData.state !== 'waiting') {
+                                    newState = pageData.state;
+                                    break;
+                                }
+                                await sleep(500);
+                            }
+                            if (newState) searchState = newState;
+                            continue;
+                        }
+
+                        // If not pernyataan, incomplete_data, success_modal, or modal, break out of loop to process
                         resolvingPreStates = false;
                     }
 
-                    // --- STATE C: MODAL PEMILIHAN JENIS PELANGGAN ---
-                    if (searchState === 'modal') {
-                        console.log('Mendeteksi modal pemilihan jenis pelanggan. Memilih "Rumah Tangga"...');
-                        const rumahTanggaOpt = await findButtonByKeywords(page, ['Rumah Tangga']);
-                        if (rumahTanggaOpt) {
-                            await rumahTanggaOpt.click();
-                            await sleep(500);
-                        }
-
-                        const lanjutkanBtn = await findButtonByKeywords(page, ['LANJUTKAN TRANSAKSI']);
-                        if (lanjutkanBtn) {
-                            await lanjutkanBtn.click();
-                            await sleep(1500);
-                        }
-
-                        let qtyReady = false;
-                        for (let attempt = 0; attempt < 10; attempt++) {
-                            const loopState = await page.evaluate(() => {
-                                const txt = document.body.textContent.toLowerCase();
-                                if (txt.includes('melebihi batas kewajaran') || txt.includes('batas kewajaran')) {
-                                    return 'limit';
-                                }
-                                if (txt.includes('cek pesanan') || txt.includes('jumlah produk')) {
-                                    return 'ready';
-                                }
-                                return 'waiting';
-                            });
-
-                            if (loopState === 'limit') {
-                                throw new Error('FATAL_LIMIT_EXCEEDED');
-                            } else if (loopState === 'ready') {
-                                qtyReady = true;
-                                break;
-                            }
-                            await sleep(500);
-                        }
-
-                        if (!qtyReady) {
-                            throw new Error('Halaman input Qty tidak muncul setelah mengklik Lanjutkan.');
-                        }
+                    // --- HANDLE B: LIMIT BULANAN TERLAMPAUI ---
+                    if (searchState === 'limit') {
+                        console.log('Mendeteksi peringatan batas kewajaran bulan ini terpenuhi.');
+                        await api.post(`/api/gagal-lapor/${trx.id}`, {
+                            message: 'Limit batas kewajaran Pertamina'
+                        });
+                        limitCount++;
+                        await sleep(1500);
+                        continue;
                     }
+
+                    if (searchState !== 'ready') {
+                        throw new Error(`Gagal mencapai form transaksi (Status tersangkut di: ${searchState}). Tombol "CEK PESANAN" tidak ditemukan.`);
+                    }
+
 
                     // --- STATE D: PROSES HALAMAN QUANTITY ---
                     if (trx.jumlah_tabung > 1) {
@@ -1977,8 +2083,23 @@ async function run() {
                         }
                     }
 
-                    const cekPesananBtn = await findButtonByKeywords(page, ['CEK PESANAN']);
+                    let cekPesananBtn = null;
+                    for (let attempt = 0; attempt < 20; attempt++) {
+                        // Cek apakah ada popup stok kosong menutupi
+                        const isStokKosongPopup = await page.evaluate(() => {
+                            const txt = document.body.textContent.toLowerCase();
+                            return txt.includes('stok tabung kosong') || txt.includes('stok tabung yang dapat dijual kosong');
+                        });
+                        if (isStokKosongPopup) {
+                            throw new Error('FATAL: STOK_MYPERTAMINA_KOSONG');
+                        }
+
+                        cekPesananBtn = await findButtonByKeywords(page, ['CEK PESANAN']);
+                        if (cekPesananBtn) break;
+                        await sleep(500);
+                    }
                     if (!cekPesananBtn) {
+                        await page.screenshot({ path: `debug-cek-pesanan-${trx.nik}-${Date.now()}.png` });
                         throw new Error('Tombol "CEK PESANAN" tidak ditemukan.');
                     }
                     await cekPesananBtn.click();
@@ -2143,7 +2264,7 @@ async function run() {
                         if (!pangkalanHabisList.includes(merchantName)) pangkalanHabisList.push(merchantName);
                         try {
                             await api.post('/api/rpa-sync/stok-kosong', {
-                                sync_id: syncId,
+                                akun_pangkalan_id: pangkalan.id,
                                 message: 'Stok tabung LPG 3kg habis di pangkalan. Harap lakukan penebusan (Beli stok) ke Agen.'
                             });
                         } catch (e) {}
@@ -2324,4 +2445,15 @@ process.on('SIGINT', async () => {
     }
 });
 
-startDaemon();
+// Periksa argumen untuk run-once
+const isRunOnce = process.argv.includes('--run-once');
+
+if (isRunOnce) {
+    console.log('Menjalankan Bot dalam Mode RUN-ONCE (Satu kali eksekusi)...');
+    run().then(() => {
+        console.log('Tugas selesai. Menutup terminal...');
+        process.exit(0);
+    });
+} else {
+    startDaemon();
+}

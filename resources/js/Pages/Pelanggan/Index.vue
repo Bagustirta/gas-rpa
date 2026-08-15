@@ -136,7 +136,7 @@
                 <td class="py-3.5 px-4 text-xs">
                   <template v-if="pelanggan.is_synced">
                     <div class="font-medium text-slate-800">{{ pelanggan.jenis_kelamin || '-' }}</div>
-                    <div class="text-slate-500">{{ (pelanggan.tempat_lahir || pelanggan.kabupaten_kota || '-').replace(/^(KAB\.|KOTA|KEC\.|KECAMATAN|DESA|KEL\.|KELURAHAN)\s+/i, '') }}, {{ pelanggan.tanggal_lahir || '-' }}</div>
+                    <div class="text-slate-500">{{ (pelanggan.tempat_lahir || pelanggan.kabupaten_kota || '-').replace(/^(KAB\.|KB\.|KABUPATEN|KOTA|KEC\.|KECAMATAN|DESA|KEL\.|KELURAHAN)\s*/i, '') }}, {{ pelanggan.tanggal_lahir || '-' }}</div>
                   </template>
                   <template v-else>
                     <span class="text-slate-400 italic text-[11px]">Belum disinkronisasi</span>
@@ -145,7 +145,7 @@
                 <!-- Domisili -->
                 <td class="py-3.5 px-4 text-xs">
                   <template v-if="pelanggan.is_synced">
-                    <div class="font-medium text-slate-800">{{ (pelanggan.kabupaten_kota || '-').replace(/^(KAB\.|KOTA)\s+/i, '') }}</div>
+                    <div class="font-medium text-slate-800">{{ (pelanggan.kabupaten_kota || '-').replace(/^(KAB\.|KB\.|KABUPATEN|KOTA)\s*/i, '') }}</div>
                     <div class="text-slate-500">{{ (pelanggan.kecamatan || '-').replace(/^(KEC\.|KECAMATAN)\s+/i, '') }}, {{ pelanggan.provinsi || '-' }}</div>
                   </template>
                   <template v-else>

@@ -27,8 +27,7 @@ class ApiLpgController extends Controller
         $bulan = $request->integer('bulan', Carbon::now()->month);
         $tahun = $request->integer('tahun', Carbon::now()->year);
 
-        // Hapus otomatis transaksi bulan-bulan sebelumnya
-        TransaksiGas::where('tanggal_transaksi', '<', Carbon::now()->startOfMonth())->delete();
+        // (Dihapus: Dulu sistem menghapus semua transaksi bulan lalu, sekarang transaksi SUKSES dipertahankan untuk riwayat)
 
         // Hapus otomatis transaksi yang hari transaksinya sudah lewat (sebelum hari ini) dan belum/gagal terlaporkan
         TransaksiGas::whereDate('tanggal_transaksi', '<', Carbon::today())
@@ -95,15 +94,14 @@ class ApiLpgController extends Controller
         $bulan = $request->integer('bulan', Carbon::now()->month);
         $tahun = $request->integer('tahun', Carbon::now()->year);
 
-        // Hapus otomatis transaksi bulan-bulan sebelumnya
-        TransaksiGas::where('tanggal_transaksi', '<', Carbon::now()->startOfMonth())->delete();
+        // (Dihapus: Dulu sistem menghapus semua transaksi bulan lalu, sekarang transaksi SUKSES dipertahankan untuk riwayat)
 
         // Hapus otomatis transaksi yang hari transaksinya sudah lewat (sebelum hari ini) dan belum/gagal terlaporkan
         TransaksiGas::whereDate('tanggal_transaksi', '<', Carbon::today())
             ->where('status_lapor', '!=', 'sukses')
             ->delete();
 
-        $queryBuilder = TransaksiGas::with('pelanggan:id,nik')
+        $queryBuilder = TransaksiGas::with('pelanggan:id,nik,tempat_lahir,tanggal_lahir,kabupaten_kota')
             ->whereHas('pelanggan', function ($q) use ($bulan, $tahun) {
                 $q->where('status', true)
                   ->where(function ($sub) use ($bulan, $tahun) {
