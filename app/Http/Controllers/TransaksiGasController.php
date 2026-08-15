@@ -48,7 +48,8 @@ class TransaksiGasController extends Controller
             $query->whereDate('tanggal_transaksi', $request->tanggal);
         }
 
-        $transaksis = $query->orderBy('tanggal_transaksi', 'desc')
+        $transaksis = $query->orderBy('updated_at', 'desc')
+            ->orderBy('id', 'desc')
             ->paginate(100)
             ->onEachSide(1)
             ->withQueryString()
