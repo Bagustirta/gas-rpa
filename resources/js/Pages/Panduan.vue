@@ -100,7 +100,8 @@
                 </h3>
                 <ol class="list-decimal pl-5 space-y-2 text-sm text-slate-600">
                   <li>Buka menu <strong>Pelanggan</strong>.</li>
-                  <li>Anda bisa menambah data satu per satu, atau menggunakan tombol <strong>Import Excel</strong> untuk mengunggah ratusan NIK sekaligus. Sistem otomatis mendeteksi kolom NIK, Status, Tempat Lahir, dan Tanggal Lahir pada file Excel Anda secara cerdas.</li>
+                  <li>Untuk menambah secara manual, klik tombol <strong>+ Tambah Pelanggan</strong> lalu ketikkan 16 digit NIK.</li>
+                  <li>Untuk memasukkan data masal sekaligus, klik tombol <strong>Import Excel</strong>. Sistem akan mendeteksi judul kolom (NIK, Status, Tempat Lahir, Tanggal Lahir) di file Anda secara otomatis.</li>
                   <li><strong>Fitur Sync NIK:</strong> Setelah NIK masuk, tekan tombol <strong>Sync</strong> (ikon panah melingkar) pada baris pelanggan. Sistem akan otomatis membedah NIK untuk mengisi Provinsi, Kabupaten, Kecamatan, Tanggal Lahir, dan Jenis Kelamin tanpa perlu diketik manual!</li>
                   <li>Anda juga dapat menekan tombol <strong>Export Excel</strong> jika sewaktu-waktu ingin mencadangkan (<em>backup</em>) data pelanggan Anda ke komputer.</li>
                 </ol>
