@@ -101,6 +101,34 @@ Dilengkapi dengan sistem Antrean Terpusat (*Queue Worker*) dan Keamanan Tingkat 
 
 ---
 
+## Alur Penggunaan (Panduan Step-by-Step)
+
+Bagi pengguna (Agen/Pangkalan), berikut adalah langkah-langkah menggunakan sistem ini dari awal hingga akhir:
+
+### 1. Menambahkan Akun Pangkalan
+*   **Fungsi:** Menghubungkan aplikasi lokal dengan portal MyPertamina.
+*   **Langkah:** Pergi ke menu **Akun Pangkalan**. Klik "Tambah Pangkalan" dan masukkan *username* serta *password* akun MyPertamina Anda. Data ini akan dienkripsi secara aman oleh sistem.
+
+### 2. Memasukkan Data Pelanggan (Import & Auto-Sync)
+*   **Fungsi:** Membangun *database* pelanggan yang berhak membeli gas.
+*   **Langkah:** Pergi ke menu **Pelanggan**. Anda bisa menambah data satu per satu, atau menekan tombol **Import Excel** untuk memasukkan ratusan NIK sekaligus.
+*   **Fitur Sync NIK:** Setelah data masuk, Anda bisa menekan tombol **Sync** (ikon panah melingkar) di tiap baris pelanggan. Sistem akan secara cerdas membedah NIK tersebut untuk otomatis mengisi form Tempat Lahir, Tanggal Lahir, Jenis Kelamin, Provinsi, hingga Kecamatan tanpa perlu diketik manual!
+
+### 3. Membagi Jatah Transaksi (Distribusi)
+*   **Fungsi:** Mengatur siapa saja yang membeli gas pada hari itu ke dalam sebuah "antrean draf" sebelum dilaporkan ke Pertamina.
+*   **Langkah:** Buka menu **Transaksi Gas**. Centang kotak di samping nama-nama pelanggan yang membeli gas (bisa centang masal). Lalu klik tombol biru **Bagikan X Tabung**. Kini pelanggan tersebut masuk dalam daftar antrean transaksi berstatus *Belum Lapor*.
+
+### 4. Menjalankan Bot RPA (Sinkronisasi)
+*   **Fungsi:** Menyuruh robot (bot) untuk mulai mengetik dan menginput data antrean tersebut ke web asli MyPertamina.
+*   **Langkah:** Di menu **Transaksi Gas**, pilih Pangkalan yang ingin Anda gunakan dari *dropdown*. Lalu tekan tombol merah **Mulai Sinkronisasi RPA**.
+*   **Cara Kerja:** Bot akan otomatis membuka *browser* siluman, *login*, memasukkan NIK, memilih pelanggan, dan mencatat transaksi ke MyPertamina satu per satu secara otomatis.
+
+### 5. Memantau Hasil Laporan (Live Tracking)
+*   **Fungsi:** Melihat laporan sukses/tidaknya input data dari bot secara seketika (*real-time*).
+*   **Langkah:** Anda cukup duduk diam memantau tabel di menu **Transaksi Gas**. Tabel ini sudah diatur cerdas; begitu bot berhasil/gagal memproses satu NIK, status di layar Anda akan langsung berubah secara ajaib (*Sukses* / *Gagal* / *Kuota Habis*), dan datanya akan langsung melompat ke urutan teratas beserta jam pemrosesan riil dari bot.
+
+---
+
 ## Lisensi
 
 Proyek ini menggunakan lisensi **MIT License**. Anda bebas menggunakan, memodifikasi, dan mendistribusikannya kembali.
