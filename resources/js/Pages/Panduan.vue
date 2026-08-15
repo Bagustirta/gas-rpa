@@ -137,7 +137,9 @@
                   <div class="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">3</div>
                   <div class="text-sm text-slate-700">
                     <p>Pilih pangkalan, lalu masukkan <strong>Total Tabung</strong>.</p>
-                    <p class="text-emerald-600 font-semibold mt-1 bg-emerald-50 p-2 rounded-lg border border-emerald-100 text-xs">💡 <em>Tips: Jika hari ini Anda mendapat jatah 40 tabung, Anda bisa memasukkan 70-80 tabung di sistem! Tujuannya agar sistem mencatat lebih banyak pelanggan untuk menyeleksi mana status pelanggannya yang masih aktif dan mana yang tidak saat sinkronisasi RPA nanti.</em></p>
+                    <p class="text-slate-800 font-medium mt-3 bg-amber-100/80 p-3.5 rounded-xl border border-amber-300 text-sm shadow-sm leading-relaxed">
+                      💡 <strong class="text-amber-700">Tips Cerdas:</strong> Jika hari ini Anda mendapat jatah 40 tabung, Anda bisa memasukkan <strong>70-80 tabung</strong> di sistem! Tujuannya agar sistem mencatat lebih banyak antrean pelanggan untuk membantu menyeleksi secara otomatis mana status pelanggan yang masih aktif dan mana yang tidak saat proses sinkronisasi RPA nanti.
+                    </p>
                   </div>
                 </li>
                 <li class="flex items-start">
