@@ -226,11 +226,11 @@
               <ol class="space-y-4">
                 <li class="flex items-start">
                   <div class="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">1</div>
-                  <p class="text-sm text-slate-700">Masuk ke menu <strong>Pelanggan</strong>.</p>
+                  <p class="text-sm text-slate-700">Buka menu <strong>Transaksi Gas</strong>.</p>
                 </li>
                 <li class="flex items-start">
                   <div class="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">2</div>
-                  <p class="text-sm text-slate-700">Centang kotak di samping nama pelanggan yang ingin dicek kuotanya.</p>
+                  <p class="text-sm text-slate-700">Centang kotak di samping nama pelanggan yang ingin dicek kuotanya pada tabel antrean.</p>
                 </li>
                 <li class="flex items-start">
                   <div class="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">3</div>
