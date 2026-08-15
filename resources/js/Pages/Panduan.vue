@@ -96,12 +96,13 @@
               <div class="bg-slate-50 rounded-2xl p-5 border border-slate-100">
                 <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2">
                   <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
-                  Menambahkan Data Pelanggan
+                  Menambahkan Data Pelanggan (Import & Auto-Sync)
                 </h3>
                 <ol class="list-decimal pl-5 space-y-2 text-sm text-slate-600">
                   <li>Buka menu <strong>Pelanggan</strong>.</li>
-                  <li>Klik tombol <strong>+ Tambah Pelanggan</strong>.</li>
-                  <li>Masukkan <strong>NIK pelanggan</strong> <em>(pastikan valid 16 digit)</em>. Nama tidak perlu diisi demi menjaga privasi warga.</li>
+                  <li>Anda bisa menambah data satu per satu, atau menggunakan tombol <strong>Import Excel</strong> untuk mengunggah ratusan NIK sekaligus. Sistem otomatis mendeteksi kolom NIK, Status, Tempat Lahir, dan Tanggal Lahir pada file Excel Anda secara cerdas.</li>
+                  <li><strong>Fitur Sync NIK:</strong> Setelah NIK masuk, tekan tombol <strong>Sync</strong> (ikon panah melingkar) pada baris pelanggan. Sistem akan otomatis membedah NIK untuk mengisi Provinsi, Kabupaten, Kecamatan, Tanggal Lahir, dan Jenis Kelamin tanpa perlu diketik manual!</li>
+                  <li>Anda juga dapat menekan tombol <strong>Export Excel</strong> jika sewaktu-waktu ingin mencadangkan (<em>backup</em>) data pelanggan Anda ke komputer.</li>
                 </ol>
               </div>
             </div>
