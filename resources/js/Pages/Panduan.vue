@@ -207,6 +207,39 @@
             </div>
           </div>
 
+          <!-- Step 4 -->
+          <div class="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-slate-100 relative overflow-hidden group hover:border-purple-200 transition-colors">
+            <div class="absolute -right-8 -top-8 text-slate-50 opacity-50 font-black text-9xl transition-transform group-hover:scale-110 duration-500 pointer-events-none">4</div>
+            
+            <div class="flex items-center space-x-4 mb-6 relative z-10">
+              <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center shadow-inner">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <h2 class="text-2xl font-extrabold text-slate-800">Audit Kuota Pelanggan</h2>
+            </div>
+            
+            <div class="relative z-10">
+              <p class="text-slate-600 mb-5">Anda juga bisa memeriksa secara mandiri sisa kuota tabung bulanan pelanggan tanpa harus mencatat transaksi di antrean terlebih dahulu.</p>
+              
+              <ol class="space-y-4">
+                <li class="flex items-start">
+                  <div class="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">1</div>
+                  <p class="text-sm text-slate-700">Masuk ke menu <strong>Pelanggan</strong>.</p>
+                </li>
+                <li class="flex items-start">
+                  <div class="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">2</div>
+                  <p class="text-sm text-slate-700">Centang kotak di samping nama pelanggan yang ingin dicek kuotanya.</p>
+                </li>
+                <li class="flex items-start">
+                  <div class="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">3</div>
+                  <p class="text-sm text-slate-700">Tekan tombol <strong>Cek Kuota (Pertamina)</strong>. Sistem akan langsung menanyakan ke server MyPertamina secara <em>real-time</em> dan menampilkan sisa jatah bulan ini secara ajaib.</p>
+                </li>
+              </ol>
+            </div>
+          </div>
+
           <!-- FAQ Section -->
           <div class="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-slate-100">
             <div class="flex items-center space-x-4 mb-8">
