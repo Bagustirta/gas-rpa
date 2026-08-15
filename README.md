@@ -40,6 +40,7 @@ Dilengkapi dengan sistem Antrean Terpusat (*Queue Worker*) dan Keamanan Tingkat 
 ## Fitur Utama
 
 -   **PM2 Queue System (Sistem Antrean Beban):** Mampu melayani ratusan agen sekaligus tanpa merusak server. Jika agen memicu tombol sinkronisasi bersamaan, PM2 akan membagi beban secara adil (misal 4 bot jalan bersamaan, sisanya menunggu giliran di antrean).
+-   **Dynamic Excel Import/Export:** Sistem impor/ekspor data pelanggan yang sangat fleksibel. Mampu membaca file Excel dengan berbagai kombinasi kolom (NIK, Status, Tempat Lahir, Tanggal Lahir) tanpa perlu urutan kaku berkat fitur deteksi judul kolom (*Smart Header Detection*). Data ganda akan otomatis menimpa/memperbarui data lama tanpa duplikasi.
 -   **Enkripsi Data Sensitif:** Seluruh NIK Pelanggan dan Kredensial Pangkalan di-*database* berubah menjadi sandi acak. Privasi 100% terjaga sekalipun *database* berhasil diunduh secara ilegal oleh *hacker*.
 -   **Dashboard Super Admin (Command Center):** Memantau pemakaian memori server (*RAM Allocation*), trafik transaksi harian/bulanan, dan Log Live dari seluruh Agen.
 -   **Deteksi Otomatis & Recovery:**

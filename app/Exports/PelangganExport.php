@@ -33,8 +33,10 @@ class PelangganExport extends StringValueBinder implements FromQuery, WithHeadin
     public function headings(): array
     {
         return [
-            'nik',
-            'status'
+            'NIK',
+            'Status',
+            'Tempat Lahir',
+            'Tanggal Lahir'
         ];
     }
 
@@ -43,6 +45,8 @@ class PelangganExport extends StringValueBinder implements FromQuery, WithHeadin
         return [
             $pelanggan->nik,
             $pelanggan->status ? 'aktif' : 'nonaktif',
+            $pelanggan->tempat_lahir,
+            $pelanggan->tanggal_lahir ? \Carbon\Carbon::parse($pelanggan->tanggal_lahir)->format('d/m/Y') : null,
         ];
     }
 }
