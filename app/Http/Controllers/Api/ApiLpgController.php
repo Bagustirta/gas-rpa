@@ -190,6 +190,7 @@ class ApiLpgController extends Controller
         }
 
         $transaksi->update([
+            'tanggal_transaksi'    => Carbon::now(),
             'dilaporkan_pertamina' => true,
             'waktu_dilaporkan'     => Carbon::now(),
             'status_lapor'         => 'sukses',
@@ -475,12 +476,14 @@ class ApiLpgController extends Controller
         // dan JANGAN nonaktifkan pelanggan agar bisa dicoba otomatis tahun depan saat usianya sudah genap 17 tahun.
         if (str_contains($msgLower, 'belum 17 tahun') || str_contains($msgLower, 'belum berusia 17')) {
             $transaksi->update([
+                'tanggal_transaksi'    => Carbon::now(),
                 'status_lapor'         => 'belum_17_tahun',
                 'catatan_lapor'        => 'Ditangguhkan: NIK belum berusia 17 tahun (Dicoba lagi tahun depan)',
                 'dilaporkan_pertamina' => false,
             ]);
         } else {
             $transaksi->update([
+                'tanggal_transaksi'    => Carbon::now(),
                 'status_lapor'         => 'gagal',
                 'catatan_lapor'        => $data['message'],
                 'dilaporkan_pertamina' => false,
@@ -511,6 +514,7 @@ class ApiLpgController extends Controller
                 if ($currentSum < 4) {
                     $selisih = 4 - $currentSum;
                     $transaksi->update([
+                        'tanggal_transaksi' => Carbon::now(),
                         'jumlah_tabung' => $transaksi->jumlah_tabung + $selisih,
                         'status_lapor' => 'kuota_habis',
                         'dilaporkan_pertamina' => true,
@@ -519,6 +523,7 @@ class ApiLpgController extends Controller
                     ]);
                 } else {
                     $transaksi->update([
+                        'tanggal_transaksi' => Carbon::now(),
                         'status_lapor' => 'kuota_habis',
                         'dilaporkan_pertamina' => true,
                         'catatan_lapor' => 'Selesai: Kuota 4/4 Habis (Beli di pangkalan lain)',
