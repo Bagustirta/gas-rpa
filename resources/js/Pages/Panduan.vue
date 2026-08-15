@@ -170,7 +170,7 @@
                 <ol class="space-y-4">
                   <li class="flex items-start">
                     <div class="flex-shrink-0 w-6 h-6 rounded-full bg-white border border-amber-200 text-amber-600 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">1</div>
-                    <p class="text-sm text-slate-700">Pastikan ada transaksi yang berstatus <code class="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-xs shadow-sm">Belum Lapor</code>.</p>
+                    <p class="text-sm text-slate-700">Pastikan ada transaksi yang berstatus <code class="bg-amber-100 text-amber-800 font-bold px-2 py-1 rounded border border-amber-300 text-sm shadow-sm">Belum Lapor</code>.</p>
                   </li>
                   <li class="flex items-start">
                     <div class="flex-shrink-0 w-6 h-6 rounded-full bg-white border border-amber-200 text-amber-600 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">2</div>
