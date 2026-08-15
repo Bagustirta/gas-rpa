@@ -43,9 +43,11 @@ Dilengkapi dengan sistem Antrean Terpusat (*Queue Worker*) dan Keamanan Tingkat 
 -   **Enkripsi Data Sensitif:** Seluruh NIK Pelanggan dan Kredensial Pangkalan di-*database* berubah menjadi sandi acak. Privasi 100% terjaga sekalipun *database* berhasil diunduh secara ilegal oleh *hacker*.
 -   **Dashboard Super Admin (Command Center):** Memantau pemakaian memori server (*RAM Allocation*), trafik transaksi harian/bulanan, dan Log Live dari seluruh Agen.
 -   **Deteksi Otomatis & Recovery:**
+    -   *Self-Healing Engine:* Menggunakan *state-machine loop* dinamis untuk menangani urutan pop-up yang muncul secara acak (Update Data, Pernyataan Persetujuan, dll) serta otomatis melakukan *refresh* (muat ulang) halaman secara mandiri saat koneksi internet buruk.
     -   *Stok Kosong:* Otomatis mendeteksi jika stok di portal MyPertamina habis, dan beralih ke pangkalan berikutnya.
     -   *Batas Kuota Bulanan:* Mendeteksi batas limit 4 tabung/bulan.
-    -   *Invalid NIK:* Memblokir (nonaktif) status pelanggan lokal jika NIK ditolak/tidak terdaftar di server pusat.
+    -   *Invalid NIK:* Memblokir (nonaktif) status pelanggan lokal secara spesifik hanya jika NIK ditolak/tidak terdaftar di server pusat.
+-   **History Preservation (Penyimpanan Riwayat):** Otomatis membersihkan antrean transaksi yang gagal atau kedaluwarsa setiap pergantian bulan/hari, namun secara permanen menyimpan jejak seluruh riwayat transaksi yang sukses.
 
 ---
 
