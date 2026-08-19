@@ -29,8 +29,8 @@ class AkunPangkalan extends Model
     protected static function booted()
     {
         static::creating(function ($model) {
-            if (auth()->check()) {
-                $model->user_id = $model->user_id ?? auth()->id();
+            if (\Illuminate\Support\Facades\Auth::check()) {
+                $model->user_id = $model->user_id ?? \Illuminate\Support\Facades\Auth::id();
             }
         });
     }

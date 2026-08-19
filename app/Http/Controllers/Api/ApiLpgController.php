@@ -481,6 +481,13 @@ class ApiLpgController extends Controller
                 'catatan_lapor'        => 'Ditangguhkan: NIK belum berusia 17 tahun (Dicoba lagi tahun depan)',
                 'dilaporkan_pertamina' => false,
             ]);
+        } else if (str_contains($msgLower, 'meninggal')) {
+            $transaksi->update([
+                'tanggal_transaksi'    => Carbon::now(),
+                'status_lapor'         => 'meninggal',
+                'catatan_lapor'        => 'Ditangguhkan: Pelanggan teridentifikasi meninggal dunia',
+                'dilaporkan_pertamina' => false,
+            ]);
         } else {
             $transaksi->update([
                 'tanggal_transaksi'    => Carbon::now(),

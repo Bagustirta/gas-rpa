@@ -8,7 +8,7 @@ const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
 
-const LARAVEL_URL = process.env.LARAVEL_APP_URL || process.env.APP_URL || 'http://localhost:8000';
+const LARAVEL_URL = (process.env.LARAVEL_APP_URL || process.env.APP_URL || 'http://localhost:8000').trim();
 const API_KEY = process.env.LPG_API_KEY || 'lpg-secret-token-12345';
 const PERTAMINA_URL = process.env.PERTAMINA_PORTAL_URL || 'https://subsiditepat.mypertamina.id/LPG';
 
@@ -959,11 +959,30 @@ async function run() {
 
         // 1. Memeriksa antrean sinkronisasi
         const syncUrl = targetSyncId ? `/api/rpa-sync/pending?sync_id=${targetSyncId}` : '/api/rpa-sync/pending';
-        const syncResponse = await api.get(syncUrl);
-        const syncJob = syncResponse.data.sync;
+        
+        let syncJob = null;
+        let syncResponse = null;
+
+        // Lakukan polling beberapa kali khusus untuk mengatasi delay commit database (Race Condition lambat)
+        for (let attempt = 1; attempt <= 5; attempt++) {
+            syncResponse = await api.get(syncUrl);
+            syncJob = syncResponse.data.sync;
+            
+            if (syncJob) break;
+            
+            // Jika dalam mode run-once, tunggu dan coba lagi (maks 5 detik)
+            if (process.argv.includes('--run-once')) {
+                console.log(`[Menunggu Antrean...] Percobaan ${attempt}/5: Data belum masuk ke database, mencari lagi...`);
+                await sleep(1500);
+            } else {
+                break; // Jika daemon, keluar dari loop karena daemon punya loop sendiri
+            }
+        }
 
         if (!syncJob) {
-            // Hening saat idle agar log tidak penuh
+            if (process.argv.includes('--run-once')) {
+                console.log('Tidak ada antrean ditemukan setelah menunggu. Mungkin sudah diambil oleh proses lain (Daemon) atau koneksi database sangat lambat.');
+            }
             return false;
         }
 
@@ -1043,8 +1062,8 @@ async function run() {
             console.log('Membuka browser otomatis (Mode Tampil/UI)...');
             const browser = await puppeteer.launch({
                 headless: false, // Berjalan secara terlihat (menampilkan Chrome)
-                defaultViewport: { width: 1366, height: 768 }, // Paksa ukuran layar desktop agar tidak jadi tampilan HP
-                args: ['--window-size=1366,768', '--start-maximized', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+                defaultViewport: null, // Biarkan viewport menyesuaikan ukuran jendela secara otomatis
+                args: ['--start-maximized', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
             });
             activeBrowser = browser; // Set ke global untuk cleanup jika Ctrl+C
 
@@ -1605,9 +1624,14 @@ async function run() {
                                 return { state: 'modal' };
                             }
 
+                            const isLogin = txt.includes('nomor ponsel atau email') && txt.includes('merchant apps');
+                            if (isLogin) {
+                                return { state: 'login' };
+                            }
+
                             const hasCekPesanan = txt.includes('cek pesanan') || txt.includes('jumlah produk');
                             if (hasCekPesanan) {
-                                return { state: 'qty' };
+                                return { state: 'ready' };
                             }
 
                             const isError = txt.includes('tidak terdaftar') ||
@@ -1752,6 +1776,9 @@ async function run() {
                                     if (txt.includes('melebihi batas kewajaran') || txt.includes('batas kewajaran')) {
                                         return { state: 'limit' };
                                     }
+                                    const isLogin = txt.includes('nomor ponsel atau email') && txt.includes('merchant apps');
+                                    if (isLogin) return { state: 'login' };
+                                    
                                     const hasCekPesanan = txt.includes('cek pesanan') || txt.includes('jumlah produk');
                                     if (hasCekPesanan) return { state: 'ready' };
                                     return { state: 'waiting' };
@@ -1762,7 +1789,11 @@ async function run() {
                                 }
                                 await sleep(500);
                             }
-                            if (newState) searchState = newState;
+                            if (newState) {
+                                searchState = newState;
+                            } else {
+                                throw new Error(`Status halaman tidak merespon setelah diklik (stuck di ${searchState}).`);
+                            }
                             continue; // Re-evaluate loop
                         } 
                         
@@ -1788,6 +1819,9 @@ async function run() {
                                     if (txt.includes('melebihi batas kewajaran') || txt.includes('batas kewajaran')) {
                                         return { state: 'limit' };
                                     }
+                                    const isLogin = txt.includes('nomor ponsel atau email') && txt.includes('merchant apps');
+                                    if (isLogin) return { state: 'login' };
+                                    
                                     const hasCekPesanan = txt.includes('cek pesanan') || txt.includes('jumlah produk');
                                     if (hasCekPesanan) return { state: 'ready' };
                                     return { state: 'waiting' };
@@ -1798,7 +1832,11 @@ async function run() {
                                 }
                                 await sleep(500);
                             }
-                            if (newState) searchState = newState;
+                            if (newState) {
+                                searchState = newState;
+                            } else {
+                                throw new Error(`Status halaman tidak merespon setelah success_modal (stuck di ${searchState}).`);
+                            }
                             continue;
                         }
 
@@ -1809,6 +1847,17 @@ async function run() {
                             if (updateBtn) {
                                 await updateBtn.click();
                                 await sleep(2000);
+                                
+                                // Cek apakah muncul modal "Segera Lengkapi NIB"
+                                const isNibModal = await page.evaluate(() => {
+                                    const txt = document.body.textContent.toLowerCase();
+                                    return txt.includes('lengkapi nib') || txt.includes('nib sebelum') || txt.includes('segera lengkapi nib');
+                                });
+                                
+                                if (isNibModal) {
+                                    console.log('Mendeteksi modal kewajiban melengkapi NIB untuk Usaha Mikro.');
+                                    throw new Error('Gagal: Pelanggan mikro wajib melengkapi NIB.');
+                                }
                             }
 
                             console.log('Mengisi Tempat dan Tanggal Lahir...');
@@ -1983,6 +2032,9 @@ async function run() {
                                     if (txt.includes('melebihi batas kewajaran') || txt.includes('batas kewajaran')) {
                                         return { state: 'limit' };
                                     }
+                                    const isLogin = txt.includes('nomor ponsel atau email') && txt.includes('merchant apps');
+                                    if (isLogin) return { state: 'login' };
+
                                     const hasCekPesanan = txt.includes('cek pesanan') || txt.includes('jumlah produk');
                                     if (hasCekPesanan) return { state: 'ready' };
                                     return { state: 'waiting' };
@@ -1993,7 +2045,11 @@ async function run() {
                                 }
                                 await sleep(500);
                             }
-                            if (newState) searchState = newState;
+                            if (newState) {
+                                searchState = newState;
+                            } else {
+                                throw new Error(`Status halaman tidak merespon setelah diklik (stuck di ${searchState}).`);
+                            }
                             if (searchState === 'incomplete_data') {
                                 await page.screenshot({ path: `debug-incomplete-${trx.nik}-${Date.now()}.png` });
                                 console.log('📸 Screenshot gagal update form disimpan.');
@@ -2002,14 +2058,88 @@ async function run() {
                         }
 
                         if (searchState === 'modal') {
-                            console.log('Mendeteksi modal pemilihan jenis pelanggan. Memilih "Rumah Tangga"...');
-                            const rumahTanggaOpt = await findButtonByKeywords(page, ['Rumah Tangga']);
-                            if (rumahTanggaOpt) {
-                                await rumahTanggaOpt.click();
-                                await sleep(500);
+                            console.log('Mendeteksi modal pendaftaran/pemilihan jenis pelanggan...');
+                            
+                            // Mendeteksi opsi yang tersedia di layar agar tidak menebak-nebak
+                            const detectedOption = await page.evaluate(() => {
+                                const isVisible = (el) => {
+                                    const rect = el.getBoundingClientRect();
+                                    return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
+                                };
+                                const elements = Array.from(document.querySelectorAll('*'));
+                                let hasRumahTangga = false;
+                                let hasUsahaMikro = false;
+                                
+                                for (const el of elements) {
+                                    if (!isVisible(el) || el.children.length > 2) continue;
+                                    const txt = (el.textContent || '').trim().toLowerCase();
+                                    if (txt === 'rumah tangga') hasRumahTangga = true;
+                                    if (txt === 'usaha mikro') hasUsahaMikro = true;
+                                }
+                                
+                                if (hasRumahTangga) return 'Rumah Tangga';
+                                if (hasUsahaMikro) return 'Usaha Mikro';
+                                return null;
+                            });
+
+                            if (detectedOption) {
+                                console.log(`✓ Sistem mendeteksi ketersediaan opsi "${detectedOption}". Memilih opsi tersebut...`);
+                                const clicked = await page.evaluate((opt) => {
+                                    const elements = Array.from(document.querySelectorAll('*'));
+                                    let targetEl = null;
+
+                                    for (const el of elements) {
+                                        if (el.children.length > 2) continue;
+                                        if ((el.textContent || '').trim().toLowerCase() === opt.toLowerCase()) {
+                                            targetEl = el;
+                                            break;
+                                        }
+                                    }
+
+                                    if (targetEl) {
+                                        // Coba cari tombol 'Pilih' di dalam parent terdekat (hingga 3 level ke atas)
+                                        let currentParent = targetEl.parentElement;
+                                        for (let i = 0; i < 3; i++) {
+                                            if (!currentParent) break;
+                                            const pilihElements = Array.from(currentParent.querySelectorAll('*')).filter(e => {
+                                                return (e.textContent || '').trim().toLowerCase() === 'pilih';
+                                            });
+                                            if (pilihElements.length > 0) {
+                                                // Ambil elemen terdalam yang teksnya persis 'pilih'
+                                                pilihElements[pilihElements.length - 1].click();
+                                                return true;
+                                            }
+                                            currentParent = currentParent.parentElement;
+                                        }
+                                        
+                                        // Fallback: klik elemen teks itu sendiri
+                                        targetEl.click();
+                                        return true;
+                                    }
+                                    return false;
+                                }, detectedOption);
+                                
+                                if (clicked) {
+                                    await sleep(1000);
+                                } else {
+                                    console.log(`! Gagal mengklik opsi "${detectedOption}". Mencoba klik tombol Pilih secara umum...`);
+                                    const pilihBtn = await findButtonByKeywords(page, ['Pilih']);
+                                    if (pilihBtn) {
+                                        await pilihBtn.click();
+                                        await sleep(1000);
+                                    }
+                                }
+                            } else {
+                                console.log(`! Sistem tidak dapat mendeteksi opsi secara spesifik. Fallback mencoba memilih tombol Pilih...`);
+                                const pilihBtn = await findButtonByKeywords(page, ['Pilih']);
+                                if (pilihBtn) {
+                                    await pilihBtn.click();
+                                    await sleep(1000);
+                                }
                             }
 
-                            const lanjutkanBtn = await findButtonByKeywords(page, ['LANJUTKAN PENJUALAN', 'LANJUTKAN TRANSAKSI']);
+                            console.log('Mencari tombol pendaftaran...');
+                            const lanjutkanBtn = await findButtonByKeywords(page, ['DAFTARKAN PELANGGAN', 'LANJUTKAN PENJUALAN', 'LANJUTKAN TRANSAKSI', 'DAFTARKAN']);
                             if (lanjutkanBtn) {
                                 await lanjutkanBtn.click();
                                 await sleep(1500);
@@ -2032,6 +2162,9 @@ async function run() {
                                     if (txt.includes('stok tabung kosong') || txt.includes('stok tabung yang dapat dijual kosong')) {
                                         return { state: 'stok_kosong' };
                                     }
+                                    const isLogin = txt.includes('nomor ponsel atau email') && txt.includes('merchant apps');
+                                    if (isLogin) return { state: 'login' };
+
                                     const hasCekPesanan = txt.includes('cek pesanan') || txt.includes('jumlah produk');
                                     if (hasCekPesanan) return { state: 'ready' };
                                     return { state: 'waiting' };
@@ -2047,7 +2180,12 @@ async function run() {
                                 }
                                 await sleep(500);
                             }
-                            if (newState) searchState = newState;
+                            
+                            if (newState) {
+                                searchState = newState;
+                            } else {
+                                throw new Error(`Status halaman tidak merespon setelah diklik (stuck di ${searchState}).`);
+                            }
                             continue;
                         }
 
@@ -2221,17 +2359,25 @@ async function run() {
                     // --- RECOVERY: Cek apakah dipental ke halaman login ---
                     let isLoginPage = false;
                     try {
-                        isLoginPage = await page.evaluate(() => {
-                            const inputs = Array.from(document.querySelectorAll('input'));
-                            const hasPassword = inputs.some(input => (input.getAttribute('type') || '').toLowerCase() === 'password');
-                            const txt = document.body.textContent.toLowerCase();
-                            const hasLoginText = txt.includes('masuk ke akun') || txt.includes('selamat datang');
-                            return hasPassword || hasLoginText;
-                        });
-                        if (!isLoginPage && page.url().includes('login')) {
+                        const currentUrl = page.url().toLowerCase();
+                        if (currentUrl.includes('login')) {
                             isLoginPage = true;
+                        } else {
+                            isLoginPage = await page.evaluate(() => {
+                                const inputs = Array.from(document.querySelectorAll('input'));
+                                const hasPassword = inputs.some(input => (input.getAttribute('type') || '').toLowerCase() === 'password');
+                                const txt = document.body.textContent.toLowerCase();
+                                const hasLoginText = txt.includes('masuk ke akun') || txt.includes('selamat datang');
+                                return hasPassword || hasLoginText;
+                            });
                         }
-                    } catch (e) { }
+                    } catch (e) {
+                        try {
+                            if (page.url().toLowerCase().includes('login')) {
+                                isLoginPage = true;
+                            }
+                        } catch (err2) {}
+                    }
 
                     if (isLoginPage) {
                         console.log('⚠️ Peringatan: Sesi telah berakhir (dipental ke halaman login).');
@@ -2449,11 +2595,14 @@ process.on('SIGINT', async () => {
 const isRunOnce = process.argv.includes('--run-once');
 
 if (isRunOnce) {
-    console.log('Menjalankan Bot dalam Mode RUN-ONCE (Satu kali eksekusi)...');
-    run().then(() => {
+    (async () => {
+        console.log('Menjalankan Bot dalam Mode RUN-ONCE (Satu kali eksekusi)...');
+        console.log('Menunggu persiapan data (1.5 detik) agar sinkronisasi database selesai...');
+        await sleep(1500); // Mencegah race condition dengan proses save() di Laravel
+        await run();
         console.log('Tugas selesai. Menutup terminal...');
         process.exit(0);
-    });
+    })();
 } else {
     startDaemon();
 }

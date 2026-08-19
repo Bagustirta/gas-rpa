@@ -211,6 +211,7 @@
             <option value="kuota_habis">Limit Pertamina</option>
             <option value="belum_17_tahun">Belum 17 Tahun</option>
             <option value="gagal">Gagal Dilaporkan</option>
+            <option value="meninggal">Meninggal Dunia</option>
           </select>
         </div>
 
@@ -424,11 +425,16 @@
                       t.status_lapor === 'sukses' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                       t.status_lapor === 'kuota_habis' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                       t.status_lapor === 'belum_17_tahun' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                      t.status_lapor === 'meninggal' ? 'bg-zinc-100 text-zinc-700 border-zinc-300' :
                       t.status_lapor === 'gagal' ? 'bg-red-50 text-red-700 border-red-200' :
                       t.status_lapor === 'proses' ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse' :
                       'bg-slate-100 text-slate-500 border-slate-200'
                     ]">
-                      {{ t.status_lapor === 'belum_17_tahun' ? 'Belum 17 Thn' : t.status_lapor.replace('_', ' ') }}
+                      {{ 
+                        t.status_lapor === 'belum_17_tahun' ? 'Belum 17 Thn' : 
+                        t.status_lapor === 'meninggal' ? 'Meninggal' :
+                        t.status_lapor.replace('_', ' ') 
+                      }}
                     </span>
                     <span v-if="t.catatan_lapor" class="text-[9px] text-slate-400 mt-1 max-w-[120px] truncate" :title="t.catatan_lapor">
                       {{ t.catatan_lapor }}

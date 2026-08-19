@@ -31,15 +31,15 @@ class Pelanggan extends Model
     protected static function booted()
     {
         static::creating(function ($model) {
-            if (auth()->check()) {
-                $model->user_id = $model->user_id ?? auth()->id();
+            if (\Illuminate\Support\Facades\Auth::check()) {
+                $model->user_id = $model->user_id ?? \Illuminate\Support\Facades\Auth::id();
             }
         });
 
         static::saving(function ($model) {
             if ($model->isDirty('nik')) {
                 // Buat sidik jari statis (Blind Index) untuk fitur pencarian NIK yang persis sama
-                $model->nik_bindex = hash_hmac('sha256', $model->nik, config('app.key'));
+                $model->nik_bindex = hash_hmac('sha256', $model->nik, \Illuminate\Support\Facades\Config::get('app.key'));
             }
         });
     }
