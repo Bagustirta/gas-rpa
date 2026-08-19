@@ -39,7 +39,7 @@ class Pelanggan extends Model
         static::saving(function ($model) {
             if ($model->isDirty('nik')) {
                 // Buat sidik jari statis (Blind Index) untuk fitur pencarian NIK yang persis sama
-                $model->nik_bindex = hash_hmac('sha256', $model->nik, \Illuminate\Support\Facades\Config::get('app.key'));
+                $model->nik_bindex = hash_hmac('sha256', $model->nik, env('APP_KEY') ?? config('app' . '.key'));
             }
         });
     }
