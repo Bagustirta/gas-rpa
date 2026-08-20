@@ -384,12 +384,13 @@ class TransaksiGasController extends Controller
         // Daemon (bot.js) yang berjalan di latar belakang akan otomatis mengambil job 'pending' ini.
         // [UPDATE: Membuka terminal otomatis untuk testing tanpa PM2]
         
+        /*
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
             $base = base_path();
             $appUrl = url('/');
             pclose(popen("start \"Bot Pertamina\" cmd /c \"cd /d \"{$base}\" && set LARAVEL_APP_URL={$appUrl} && node rpa-bot/bot.js --run-once\"", 'r'));
         }
-        
+        */
 
         return redirect()->route('transaksi-gas.index')->with('success', "Antrean dibuat untuk {$belumLaporCount} transaksi. Bot RPA otomatis berjalan.");
     }

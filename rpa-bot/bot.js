@@ -1061,7 +1061,7 @@ async function run() {
 
             console.log('Membuka browser otomatis (Mode Tampil/UI)...');
             const browser = await puppeteer.launch({
-                headless: false, // Berjalan secara terlihat (menampilkan Chrome)
+                headless: true, // Berjalan di background (tanpa UI Chrome)
                 defaultViewport: null, // Biarkan viewport menyesuaikan ukuran jendela secara otomatis
                 args: ['--start-maximized', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
             });

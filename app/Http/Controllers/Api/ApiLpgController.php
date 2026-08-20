@@ -586,6 +586,10 @@ class ApiLpgController extends Controller
             $query->where('akun_pangkalan_id', $request->input('akun_pangkalan_id'));
         }
 
+        // HANYA hapus transaksi yang statusnya 'belum_lapor'.
+        // Transaksi yang sudah memiliki status lain (gagal, tertunda, sukses) tidak akan dihapus agar historinya tetap jelas.
+        $query->where('status_lapor', 'belum_lapor');
+        
         $deletedCount = $query->delete();
 
         $sisaTransaksi = TransaksiGas::where('status_lapor', 'belum_lapor')->count();
@@ -593,14 +597,14 @@ class ApiLpgController extends Controller
             \App\Models\RpaSync::whereIn('status', ['processing', 'pending'])
                 ->update([
                     'status' => 'failed',
-                    'message' => 'Dihentikan karena stok tabung di portal MyPertamina kosong. Sisa transaksi dihapus.',
+                    'message' => 'Dihentikan karena stok tabung di portal MyPertamina kosong. Sisa transaksi belum dilaporkan dihapus.',
                     'completed_at' => now(),
                 ]);
         }
 
         return response()->json([
             'status' => 'success',
-            'message' => "Stok MyPertamina untuk pangkalan ini kosong. Sebanyak {$deletedCount} transaksi yang belum sukses telah dihapus.",
+            'message' => "Sinyal stok kosong diterima. Sebanyak {$deletedCount} transaksi 'belum_lapor' telah dihapus. Data gagal/tertunda tetap aman.",
             'deleted_count' => $deletedCount
         ]);
     }
