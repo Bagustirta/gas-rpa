@@ -12,6 +12,8 @@
     "dotenv": "^16.4.5",
     "puppeteer": "^22.10.0",
     "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2"
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "pusher-js": "^8.6.0",
+    "ws": "^8.22.0"
   }
 }

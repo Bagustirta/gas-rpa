@@ -19,3 +19,11 @@ yarn-error.log
 /.vscode
 rpa-bot/node_modules/
 rpa-bot/user_data/
+rpa-bot/debug-*.png
+rpa-bot/error-*.png
+debug-*.png
+error-*.png
+*.vbs
+test_pelanggan.php
+update_timestamps.php
+query

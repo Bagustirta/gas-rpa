@@ -25,14 +25,20 @@
       "name": "queue-gas",
       "script": "d:\\laragon\\www\\gas\\artisan",
       "interpreter": "php",
-      "args": "queue:work",
+      "args": "queue:work --tries=3 --timeout=120 --sleep=3",
       "cwd": "d:\\laragon\\www\\gas"
     },
     {
-      "name": "rpa-bot",
-      "script": "bot.js",
+      "name": "rpa-scaler",
+      "script": "scaler.js",
       "cwd": "d:\\laragon\\www\\gas\\rpa-bot",
-      "interpreter": "node"
+      "interpreter": "node",
+      "autorestart": true,
+      "env": {
+        "MAX_WORKERS": "10",
+        "SCALER_CHECK_INTERVAL": "10000",
+        "SCALER_IDLE_TIMEOUT": "5"
+      }
     }
   ]
 }

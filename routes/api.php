@@ -35,6 +35,7 @@ Route::middleware(['api.key', 'throttle:60,1'])->group(function () {
     Route::get('/rekap-kuota', [ApiLpgController::class, 'rekapKuota']);
 
     // Manajemen Sinkronisasi Manual RPA Bot
+    Route::get('/rpa-sync/queue-stats', [ApiLpgController::class, 'getQueueStats']); // Untuk scaler daemon
     Route::get('/rpa-sync/pending', [ApiLpgController::class, 'getPendingSync']);
     Route::get('/rpa-sync/{id}', [ApiLpgController::class, 'getSyncStatus']);
     Route::patch('/rpa-sync/{id}', [ApiLpgController::class, 'updateSyncStatus']);

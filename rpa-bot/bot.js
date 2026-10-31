@@ -3,6 +3,12 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 puppeteer.use(StealthPlugin());
 const axios = require('axios');
 const readline = require('readline');
+// Polyfill WebSocket global agar pusher-js bisa berjalan di Node.js (bukan browser)
+const WS = require('ws');
+if (typeof global.WebSocket === 'undefined') {
+    global.WebSocket = WS;
+}
+const Pusher = require('pusher-js');
 require('dotenv').config();
 const { exec } = require('child_process');
 const util = require('util');
@@ -11,6 +17,17 @@ const execPromise = util.promisify(exec);
 const LARAVEL_URL = (process.env.LARAVEL_APP_URL || process.env.APP_URL || 'http://localhost:8000').trim();
 const API_KEY = process.env.LPG_API_KEY || 'lpg-secret-token-12345';
 const PERTAMINA_URL = process.env.PERTAMINA_PORTAL_URL || 'https://subsiditepat.mypertamina.id/LPG';
+
+// Konfigurasi Reverb WebSocket (sama dengan .env Laravel)
+const REVERB_APP_KEY  = process.env.REVERB_APP_KEY  || 'local';
+const REVERB_HOST     = process.env.REVERB_HOST     || '127.0.0.1';
+const REVERB_PORT     = parseInt(process.env.REVERB_PORT || '8082');
+const REVERB_SCHEME   = process.env.REVERB_SCHEME   || 'http';
+
+// ID unik worker ini — digunakan untuk identifikasi log pada mode multi-worker
+// Di-set melalui env PM2: WORKER_ID=1, WORKER_ID=2, dst.
+const WORKER_ID = process.env.WORKER_ID || '1';
+const LOG_PREFIX = `[Worker-${WORKER_ID}]`;
 
 // Helper sleep berbasis Node.js agar aman dari Execution Context Destroyed saat page reload
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -922,29 +939,149 @@ const api = axios.create({
     }
 });
 
-async function startDaemon() {
-    console.log('===================================================');
-    console.log('     PM2 QUEUE WORKER RPA LGP PERTAMINA AKTIF      ');
-    console.log('===================================================');
-    console.log(`Menghubungkan ke Laravel: ${LARAVEL_URL}`);
-    console.log('Pekerja (Worker) sedang berjalan di latar belakang (Daemon Mode)...');
-    
-    while (true) {
-        try {
+// =========================================================================
+// EVENT-DRIVEN DAEMON — Pure WebSocket, zero polling
+// =========================================================================
+
+/**
+ * Flag apakah bot sedang memproses job sekarang.
+ */
+let isProcessing = false;
+
+/**
+ * Flag apakah ada sinyal job baru yang datang saat bot masih sibuk.
+ * Jika true, setelah job selesai bot langsung drain antrian tanpa menunggu event lagi.
+ */
+let pendingSignal = false;
+
+/**
+ * Drain semua job pending satu per satu sampai antrian kosong.
+ * Setiap job langsung diambil setelah job sebelumnya selesai — tanpa jeda.
+ *
+ * Alur: run() → ada job? → selesai → run() lagi → tidak ada? → berhenti, tunggu event.
+ */
+async function drainQueue(source, jitterMs = 0) {
+    if (isProcessing) {
+        // Worker ini sedang kerja — simpan sinyal agar re-drain setelah selesai
+        console.log(`${LOG_PREFIX} [${source}] Sedang memproses job lain, sinyal disimpan.`);
+        pendingSignal = true;
+        return;
+    }
+
+    // Jitter: sebar waktu mulai antar worker agar tidak semua hit DB lock bersamaan.
+    // Worker-1 mulai duluan (0ms), Worker-2 sedikit delay, dst.
+    // Ini mengurangi lock contention di PostgreSQL saat multi-worker.
+    if (jitterMs > 0) {
+        await sleep(jitterMs);
+    }
+
+    // Double-check setelah jitter — mungkin worker lain sudah ambil job
+    if (isProcessing) {
+        pendingSignal = true;
+        return;
+    }
+
+    isProcessing = true;
+    pendingSignal = false;
+
+    try {
+        // Drain semua job yang ada di antrian, satu per satu
+        while (true) {
             const hasJob = await run();
             if (!hasJob) {
-                // Sleep 5 seconds before polling again
-                await sleep(5000);
-            } else {
-                // Sleep 2 seconds before grabbing next job to prevent instant loop spin
-                await sleep(2000);
+                console.log(`${LOG_PREFIX} [${source}] Antrian kosong. Menunggu job baru...`);
+                break;
             }
-        } catch (err) {
-            console.error('✗ Kesalahan kritis pada Daemon Worker:', err.message);
-            await sleep(5000);
+            console.log(`${LOG_PREFIX} [${source}] Job selesai, ambil berikutnya...`);
+            pendingSignal = false;
+        }
+    } catch (err) {
+        console.error(`${LOG_PREFIX} [${source}] Kesalahan kritis:`, err.message);
+    } finally {
+        isProcessing = false;
+
+        // Race condition guard: ada sinyal baru saat loop baru saja selesai
+        if (pendingSignal) {
+            console.log(`${LOG_PREFIX} [Post-Drain] Sinyal tertunda, cek antrian lagi...`);
+            pendingSignal = false;
+            drainQueue('Post-Drain');
         }
     }
 }
+
+/**
+ * Koneksi ke Laravel Reverb via WebSocket.
+ * Bot subscribe ke channel public 'rpa-jobs' dan langsung drain antrian saat
+ * event 'new-sync-job' diterima — tidak ada polling sama sekali.
+ */
+function connectWebSocket() {
+    // PERBAIKAN: Gunakan REVERB_HOST (reverb-gas.anomelektronik.my.id) bukan hostname dari LARAVEL_URL
+    // Bug sebelumnya: wsHost diambil dari LARAVEL_URL (gas.anomelektronik.my.id) yang salah host
+    const wsHost = REVERB_HOST;
+    const pusher = new Pusher(REVERB_APP_KEY, {
+        wsHost:            wsHost,
+        wsPort:            REVERB_PORT,
+        wssPort:           REVERB_PORT,
+        forceTLS:          REVERB_SCHEME === 'https',
+        disableStats:      true,
+        enabledTransports: ['ws', 'wss'],
+        cluster:           'mt1', // Diperlukan Pusher-JS meski tidak dipakai Reverb
+    });
+
+    pusher.connection.bind('connected', () => {
+        console.log(`✓ WebSocket terhubung ke Reverb (${wsHost}:${REVERB_PORT}).`);
+        console.log('  Bot siap menerima job secara real-time tanpa polling.');
+    });
+
+    pusher.connection.bind('error', (err) => {
+        console.error('✗ WebSocket error:', err?.error?.data?.message || JSON.stringify(err));
+    });
+
+    pusher.connection.bind('disconnected', () => {
+        console.warn('⚠ WebSocket terputus. Pusher-JS akan reconnect otomatis...');
+    });
+
+    // Subscribe ke public channel yang di-broadcast oleh RpaSyncCreated event
+    const channel = pusher.subscribe('rpa-jobs');
+
+    channel.bind('new-sync-job', (data) => {
+        console.log(`\n🔔 ${LOG_PREFIX} [WebSocket] Job baru! Sync ID: ${data.sync_id}, User: ${data.user_id}, Total: ${data.total_records} transaksi`);
+        // Jitter berdasarkan WORKER_ID agar worker tidak semua rebutan job di waktu yang sama.
+        // Worker-1: 0ms, Worker-2: 100-200ms, Worker-3: 200-400ms, dst.
+        const jitter = (parseInt(WORKER_ID) - 1) * 100 + Math.floor(Math.random() * 100);
+        drainQueue('WebSocket', jitter);
+    });
+
+    return pusher;
+}
+
+async function startDaemon() {
+    console.log('===================================================');
+    console.log(`  PM2 QUEUE WORKER RPA LPG — WORKER #${WORKER_ID}`);
+    console.log('===================================================');
+    console.log(`Menghubungkan ke Laravel  : ${LARAVEL_URL}`);
+    console.log(`Mode                      : Pure Event-Driven (WebSocket) — tanpa polling`);
+    console.log(`Worker ID                 : ${WORKER_ID}`);
+    console.log('Pekerja sedang berjalan di latar belakang (Daemon Mode)...');
+
+    // 1. Koneksi WebSocket untuk menerima trigger real-time
+    connectWebSocket();
+
+    // 2. Cek sekali saat startup (dengan jitter antar worker agar tidak rebutan)
+    //    Tangani job pending yang mungkin ada saat bot sedang restart/offline
+    const startupJitter = (parseInt(WORKER_ID) - 1) * 500; // 0ms, 500ms, 1000ms
+    if (startupJitter > 0) {
+        console.log(`${LOG_PREFIX} [Startup] Menunggu ${startupJitter}ms (jitter startup)...`);
+        await sleep(startupJitter);
+    }
+    console.log(`${LOG_PREFIX} [Startup] Memeriksa antrian tertinggal...`);
+    await drainQueue('Startup');
+
+    // 3. Bot sekarang murni menunggu event WebSocket.
+    //    Node.js event loop tetap hidup selama koneksi WS aktif.
+    console.log(`${LOG_PREFIX} [Bot] Siap menunggu job baru via WebSocket...`);
+}
+
 
 async function run() {
     try {

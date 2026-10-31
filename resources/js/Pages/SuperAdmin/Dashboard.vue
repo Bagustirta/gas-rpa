@@ -20,7 +20,7 @@
           </div>
           <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Agen Aktif</p>
           <div class="mt-2 flex items-baseline gap-2">
-            <span class="text-3xl font-black text-slate-800">{{ stats.totalUsers }}</span>
+            <span class="text-3xl font-black text-slate-800">{{ localStats.totalUsers }}</span>
             <span class="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">Akun</span>
           </div>
         </div>
@@ -29,7 +29,7 @@
         <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/60 relative overflow-hidden group">
           <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Pangkalan</p>
           <div class="mt-2 flex items-baseline gap-2">
-            <span class="text-3xl font-black text-slate-800">{{ stats.totalPangkalan }}</span>
+            <span class="text-3xl font-black text-slate-800">{{ localStats.totalPangkalan }}</span>
             <span class="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Titik</span>
           </div>
         </div>
@@ -38,7 +38,7 @@
         <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/60 relative overflow-hidden group">
           <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Global Pelanggan</p>
           <div class="mt-2 flex items-baseline gap-2">
-            <span class="text-3xl font-black text-slate-800">{{ stats.totalPelanggan }}</span>
+            <span class="text-3xl font-black text-slate-800">{{ localStats.totalPelanggan }}</span>
             <span class="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">Warga</span>
           </div>
         </div>
@@ -47,7 +47,7 @@
         <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/60 relative overflow-hidden group">
           <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Traffic Transaksi (Harian)</p>
           <div class="mt-2 flex items-baseline gap-2">
-            <span class="text-3xl font-black text-slate-800">{{ stats.totalTransaksiHariIni }}</span>
+            <span class="text-3xl font-black text-slate-800">{{ localStats.totalTransaksiHariIni }}</span>
             <span class="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Req/Hari</span>
           </div>
         </div>
@@ -56,7 +56,7 @@
         <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/60 relative overflow-hidden group">
           <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Traffic Transaksi (Bulanan)</p>
           <div class="mt-2 flex items-baseline gap-2">
-            <span class="text-3xl font-black text-slate-800">{{ stats.totalTransaksiBulanIni }}</span>
+            <span class="text-3xl font-black text-slate-800">{{ localStats.totalTransaksiBulanIni }}</span>
             <span class="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">Bulan Ini</span>
           </div>
         </div>
@@ -83,23 +83,23 @@
                 <span class="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1">Server Status</span>
                 <div class="flex items-center gap-2">
                   <svg class="w-5 h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  <span class="text-white font-mono text-base">{{ serverStatus.status }}</span>
+                  <span class="text-white font-mono text-base">{{ localServerStatus.status }}</span>
                 </div>
               </div>
 
               <div class="flex flex-col">
                 <span class="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1">System Architecture</span>
-                <span class="text-slate-300 font-mono text-sm">{{ serverStatus.os }}</span>
-                <span class="text-slate-400 font-mono text-xs mt-1">PHP {{ serverStatus.php_version }} / Lrv {{ serverStatus.laravel_version }}</span>
+                <span class="text-slate-300 font-mono text-sm">{{ localServerStatus.os }}</span>
+                <span class="text-slate-400 font-mono text-xs mt-1">PHP {{ localServerStatus.php_version }} / Lrv {{ localServerStatus.laravel_version }}</span>
               </div>
 
               <div class="flex flex-col">
                 <div class="flex justify-between items-end mb-1">
                   <span class="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Memory Allocation</span>
-                  <span class="text-emerald-400 font-mono text-xs">{{ serverStatus.memory_usage }} MB</span>
+                  <span class="text-emerald-400 font-mono text-xs">{{ localServerStatus.memory_usage }} MB</span>
                 </div>
                 <div class="w-full bg-slate-800 rounded-full h-2">
-                  <div class="bg-emerald-500 h-2 rounded-full" :style="`width: ${Math.min((serverStatus.memory_usage / 128) * 100, 100)}%`"></div>
+                  <div class="bg-emerald-500 h-2 rounded-full" :style="`width: ${Math.min((localServerStatus.memory_usage / 128) * 100, 100)}%`"></div>
                 </div>
                 <span class="text-slate-500 text-[10px] mt-1 text-right">Max Limit 128 MB</span>
               </div>
@@ -118,15 +118,15 @@
             <div class="p-6 flex flex-col gap-4">
               <div class="flex justify-between items-center bg-indigo-950/50 p-3 rounded-xl border border-indigo-800/50">
                 <span class="text-indigo-200 text-xs font-semibold">Bot Sedang Berjalan</span>
-                <span class="text-2xl font-black text-white">{{ serverStatus.active_bots }}</span>
+                <span class="text-2xl font-black text-white">{{ localServerStatus.active_bots }}</span>
               </div>
               <div class="flex justify-between items-center bg-indigo-950/50 p-3 rounded-xl border border-indigo-800/50">
                 <span class="text-indigo-200 text-xs font-semibold">Job Sinkronisasi Hari Ini</span>
-                <span class="text-2xl font-black text-white">{{ serverStatus.today_rpa_jobs }}</span>
+                <span class="text-2xl font-black text-white">{{ localServerStatus.today_rpa_jobs }}</span>
               </div>
               <div class="flex justify-between items-center bg-indigo-950/50 p-3 rounded-xl border border-indigo-800/50">
                 <span class="text-indigo-200 text-xs font-semibold">Total RAM Bot Terpakai</span>
-                <span class="text-xl font-bold text-white">{{ serverStatus.bot_memory_usage }} MB</span>
+                <span class="text-xl font-bold text-white">{{ localServerStatus.bot_memory_usage }} MB</span>
               </div>
             </div>
           </div>
@@ -153,12 +153,12 @@
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-50">
-                  <tr v-if="recentTransactions.length === 0">
+                  <tr v-if="localRecentTransactions.length === 0">
                     <td colspan="4" class="py-8 text-center text-slate-400 text-sm">
                       Belum ada transaksi di seluruh sistem.
                     </td>
                   </tr>
-                  <tr v-for="tx in recentTransactions" :key="tx.id" class="hover:bg-slate-50/50 transition-colors">
+                  <tr v-for="tx in localRecentTransactions" :key="tx.id" class="hover:bg-slate-50/50 transition-colors">
                     <td class="py-3 px-4">
                       <div class="font-semibold text-sm text-slate-700">{{ tx.nama_pelanggan }}</div>
                       <div class="text-xs font-mono text-slate-500">{{ tx.nik }}</div>
@@ -202,28 +202,36 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '../../Layouts/AppLayout.vue';
-import { onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 
-defineProps({
+const props = defineProps({
   stats: Object,
   serverStatus: Object,
   recentTransactions: Array,
 });
 
-let refreshInterval = null;
+// State reaktif yang bisa diupdate langsung via WebSocket
+const localStats = ref({ ...props.stats });
+const localServerStatus = ref({ ...props.serverStatus });
+const localRecentTransactions = ref([...props.recentTransactions]);
+
+let dashboardChannel = null;
 
 onMounted(() => {
-  // Auto-refresh data server status, transaksi, & KARTU STATISTIK (stats) secara live setiap 3 detik
-  refreshInterval = setInterval(() => {
-    router.reload({
-      only: ['serverStatus', 'recentTransactions', 'stats'],
-      preserveScroll: true,
-      preserveState: true,
-    });
-  }, 3000);
+  // Dengarkan channel superadmin-dashboard via Echo (WebSocket — no polling!)
+  if (window.Echo) {
+    dashboardChannel = window.Echo.channel('superadmin-dashboard')
+      .listen('.dashboard.updated', (e) => {
+        if (e.stats) localStats.value = e.stats;
+        if (e.serverStatus) localServerStatus.value = e.serverStatus;
+        if (e.recentTransactions) localRecentTransactions.value = e.recentTransactions;
+      });
+  }
 });
 
 onUnmounted(() => {
-  if (refreshInterval) clearInterval(refreshInterval);
+  if (dashboardChannel) {
+    window.Echo?.leaveChannel('superadmin-dashboard');
+  }
 });
 </script>

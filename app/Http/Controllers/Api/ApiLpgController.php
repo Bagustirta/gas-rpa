@@ -324,21 +324,40 @@ class ApiLpgController extends Controller
     /**
      * GET /api/rpa-sync/pending
      *
-     * Mendapatkan antrean sinkronisasi manual tertua yang berstatus 'pending'.
+     * Mendapatkan antrean sinkronisasi tertua yang berstatus 'pending'.
+     * Juga mengambil job 'processing' yang orphaned (bot mati di tengah jalan,
+     * ditandai dengan updated_at > ORPHAN_THRESHOLD_MINUTES menit tidak berubah).
      */
     public function getPendingSync(): JsonResponse
     {
-        // Use transaction to prevent race conditions when multiple workers poll at the same time
         return \Illuminate\Support\Facades\DB::transaction(function () {
+            // 1. Prioritas utama: job 'pending' baru
             $sync = \App\Models\RpaSync::where('status', 'pending')
-                ->lockForUpdate() // Lock row for update
+                ->lockForUpdate()
                 ->orderBy('created_at', 'asc')
                 ->first();
 
+            // 2. Fallback: job 'processing' orphaned (bot mati saat restart PM2)
+            if (!$sync) {
+                $orphanThreshold = now()->subMinutes(15);
+                $sync = \App\Models\RpaSync::where('status', 'processing')
+                    ->where('updated_at', '<', $orphanThreshold)
+                    ->lockForUpdate()
+                    ->orderBy('created_at', 'asc')
+                    ->first();
+
+                if ($sync) {
+                    \Illuminate\Support\Facades\Log::warning(
+                        "[RPA] Job #{$sync->id} (processing orphaned) diambil ulang oleh worker baru. " .
+                        "Last update: {$sync->updated_at}"
+                    );
+                }
+            }
+
             if ($sync) {
                 $sync->update([
-                    'status' => 'processing',
-                    'started_at' => now()
+                    'status'     => 'processing',
+                    'started_at' => now(),
                 ]);
 
                 try {
@@ -984,5 +1003,26 @@ class ApiLpgController extends Controller
         }
 
         return response()->json(['status' => 'success']);
+    }
+
+    /**
+     * GET /api/rpa-sync/queue-stats
+     *
+     * Mengembalikan statistik antrian untuk digunakan oleh scaler daemon.
+     * Scaler membaca jumlah job pending & processing untuk menentukan
+     * berapa worker yang perlu dijalankan.
+     */
+    public function getQueueStats(): JsonResponse
+    {
+        $pending    = \App\Models\RpaSync::where('status', 'pending')->count();
+        $processing = \App\Models\RpaSync::where('status', 'processing')->count();
+
+        return response()->json([
+            'status'       => 'success',
+            'pending'      => $pending,
+            'processing'   => $processing,
+            'total_active' => $pending + $processing,
+            'timestamp'    => now()->toIso8601String(),
+        ]);
     }
 }

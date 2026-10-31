@@ -230,6 +230,7 @@ class TransaksiGasController extends Controller
 
         try {
             event(new \App\Events\DataGasUpdated($userId));
+            \App\Http\Controllers\SuperAdminController::broadcastDashboard();
         } catch (\Exception $e) {}
 
         return redirect()->route('transaksi-gas.index')->with('success', 'Transaksi berhasil ditambahkan.');
@@ -302,6 +303,7 @@ class TransaksiGasController extends Controller
 
         try {
             event(new \App\Events\DataGasUpdated($userId));
+            \App\Http\Controllers\SuperAdminController::broadcastDashboard();
         } catch (\Exception $e) {}
 
         return redirect()->route('transaksi-gas.index')->with('success', 'Transaksi berhasil dihapus.');
@@ -380,8 +382,32 @@ class TransaksiGasController extends Controller
             'user_id' => $userId,
         ]);
 
-        // VBScript dihapus karena sekarang kita menggunakan PM2 Daemon Worker
-        // Daemon (bot.js) yang berjalan di latar belakang akan otomatis mengambil job 'pending' ini.
+        // 1. WebSocket broadcast (untuk UI frontend)
+        try {
+            event(new \App\Events\RpaSyncCreated($sync->id, $userId, $belumLaporCount));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal broadcast RpaSyncCreated: ' . $e->getMessage());
+        }
+
+        // 2. HTTP trigger langsung ke scaler daemon — agar scaler langsung bangun
+        //    tanpa harus menunggu fallback polling interval (default 5 menit).
+        //    Fire-and-forget: jika scaler tidak aktif, bot tetap akan ambil job
+        //    saat scaler restart dan melakukan cek startup.
+        try {
+            $scalerPort   = env('SCALER_PORT', 3099);
+            $scalerSecret = env('SCALER_SECRET', env('LPG_API_KEY', 'lpg-secret-token-12345'));
+            $ch = curl_init("http://127.0.0.1:{$scalerPort}/trigger");
+            curl_setopt_array($ch, [
+                CURLOPT_POST           => true,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 2, // non-blocking: max 2 detik, tidak boleh blokir response user
+                CURLOPT_HTTPHEADER     => ["x-scaler-secret: {$scalerSecret}"],
+            ]);
+            curl_exec($ch);
+            curl_close($ch);
+        } catch (\Throwable $e) {
+            // Abaikan — scaler mungkin sedang restart, fallback polling akan menangani
+        }
         // [UPDATE: Membuka terminal otomatis untuk testing tanpa PM2]
         
         /*
@@ -643,11 +669,11 @@ class TransaksiGasController extends Controller
 
         if ($allocated < $totalTarget) {
             $sisa = $totalTarget - $allocated;
-            try { event(new \App\Events\DataGasUpdated(Auth::id())); } catch (\Exception $e) {}
+            try { event(new \App\Events\DataGasUpdated(Auth::id())); \App\Http\Controllers\SuperAdminController::broadcastDashboard(); } catch (\Exception $e) {}
             return redirect()->route('transaksi-gas.index')->with('success', "Distribusi selesai sebagian. Berhasil membuat {$createdCount} transaksi ({$allocated} tabung). Sisa {$sisa} tabung tidak teralokasikan.");
         }
 
-        try { event(new \App\Events\DataGasUpdated(Auth::id())); } catch (\Exception $e) {}
+        try { event(new \App\Events\DataGasUpdated(Auth::id())); \App\Http\Controllers\SuperAdminController::broadcastDashboard(); } catch (\Exception $e) {}
         return redirect()->route('transaksi-gas.index')->with('success', "Distribusi otomatis berhasil. Berhasil membuat {$createdCount} transaksi.");
     }
 }

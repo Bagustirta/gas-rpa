@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\SuperAdminDashboardUpdated;
 use App\Models\User;
 use App\Models\TransaksiGas;
 use App\Models\AkunPangkalan;
@@ -13,9 +14,12 @@ use Carbon\Carbon;
 
 class SuperAdminController extends Controller
 {
-    public function dashboard()
+    /**
+     * Kumpulkan semua data dashboard SuperAdmin.
+     * Dipakai oleh dashboard() dan broadcastDashboard().
+     */
+    public static function buildDashboardData(): array
     {
-        // Kumpulkan data statistik global untuk super admin
         $totalUsers = User::where('role', 'agen')->count();
         $totalPangkalan = AkunPangkalan::count();
         $totalPelanggan = Pelanggan::count();
@@ -24,76 +28,97 @@ class SuperAdminController extends Controller
                                             ->whereYear('tanggal_transaksi', now()->year)
                                             ->count();
 
-        // Ambil 10 aktivitas transaksi terakhir secara global
         $recentTransactions = TransaksiGas::with(['pelanggan:id,nik', 'akunPangkalan:id,nama_pangkalan,user_id', 'akunPangkalan.user:id,name'])
                                           ->latest('updated_at')
                                           ->take(8)
                                           ->get()
-                                          ->map(function($t) {
+                                          ->map(function ($t) {
                                               return [
-                                                  'id' => $t->id,
-                                                  'nik' => $t->pelanggan ? $t->pelanggan->nik : '-',
+                                                  'id'             => $t->id,
+                                                  'nik'            => $t->pelanggan ? $t->pelanggan->nik : '-',
                                                   'nama_pelanggan' => 'Warga',
-                                                  'pangkalan' => $t->akunPangkalan ? $t->akunPangkalan->nama_pangkalan : '-',
-                                                  'agen' => ($t->akunPangkalan && $t->akunPangkalan->user) ? $t->akunPangkalan->user->name : '-',
-                                                  'status' => $t->status_lapor,
-                                                  'waktu' => $t->updated_at->diffForHumans()
+                                                  'pangkalan'      => $t->akunPangkalan ? $t->akunPangkalan->nama_pangkalan : '-',
+                                                  'agen'           => ($t->akunPangkalan && $t->akunPangkalan->user) ? $t->akunPangkalan->user->name : '-',
+                                                  'status'         => $t->status_lapor,
+                                                  'waktu'          => $t->updated_at->diffForHumans(),
                                               ];
-                                          });
+                                          })->toArray();
 
-        // Ambil status bot RPA
-        $activeBots = RpaSync::where('status', 'processing')->count();
+        $activeBots  = RpaSync::where('status', 'processing')->count();
         $totalRpaJobs = RpaSync::whereDate('created_at', today())->count();
 
-        // Ambil penggunaan memori bot (Node.js & Chrome) jika di Windows
         $botMemory = 0;
         try {
-                $outputNode = shell_exec('tasklist /FI "IMAGENAME eq node.exe" /FO CSV /NH 2>NUL');
-                
-                $lines = explode("\n", trim($outputNode));
-                foreach ($lines as $line) {
-                    if (strpos($line, 'node.exe') !== false) {
-                        $parts = str_getcsv($line);
-                        if (isset($parts[4])) {
-                            $memKb = (int) str_replace([' ', ',', '.', 'K', 'k', '"'], '', $parts[4]);
-                            $botMemory += $memKb;
-                        }
+            $outputNode = shell_exec('tasklist /FI "IMAGENAME eq node.exe" /FO CSV /NH 2>NUL');
+            $lines = explode("\n", trim($outputNode ?? ''));
+            foreach ($lines as $line) {
+                if (strpos($line, 'node.exe') !== false) {
+                    $parts = str_getcsv($line);
+                    if (isset($parts[4])) {
+                        $memKb = (int) str_replace([' ', ',', '.', 'K', 'k', '"'], '', $parts[4]);
+                        $botMemory += $memKb;
                     }
                 }
-
-                // KHUSUS CHROME: Ambil HANYA yang 'headless' (Bot) via WMIC, abaikan Chrome pribadi user
-                $outputChrome = shell_exec('wmic process where "name=\'chrome.exe\' and CommandLine like \'%--headless%\'" get WorkingSetSize 2>NUL');
-                if ($outputChrome) {
-                    preg_match_all('/\d+/', $outputChrome, $matches);
-                    foreach ($matches[0] as $bytes) {
-                        $botMemory += round((int)$bytes / 1024); // Convert Bytes to KB
-                    }
+            }
+            $outputChrome = shell_exec('wmic process where "name=\'chrome.exe\' and CommandLine like \'%--headless%\'" get WorkingSetSize 2>NUL');
+            if ($outputChrome) {
+                preg_match_all('/\d+/', $outputChrome, $matches);
+                foreach ($matches[0] as $bytes) {
+                    $botMemory += round((int) $bytes / 1024);
                 }
+            }
         } catch (\Exception $e) {
             // Abaikan jika command gagal
         }
 
         $serverStatus = [
-            'status' => 'Online',
-            'php_version' => PHP_VERSION,
+            'status'          => 'Online',
+            'php_version'     => PHP_VERSION,
             'laravel_version' => app()->version(),
-            'os' => php_uname('s') . ' ' . php_uname('r'),
-            'memory_usage' => round(memory_get_usage(true) / 1024 / 1024, 2),
-            'bot_memory_usage' => round($botMemory / 1024, 2),
-            'active_bots' => $activeBots,
-            'today_rpa_jobs' => $totalRpaJobs,
+            'os'              => php_uname('s') . ' ' . php_uname('r'),
+            'memory_usage'    => round(memory_get_usage(true) / 1024 / 1024, 2),
+            'bot_memory_usage'=> round($botMemory / 1024, 2),
+            'active_bots'     => $activeBots,
+            'today_rpa_jobs'  => $totalRpaJobs,
         ];
 
+        $stats = [
+            'totalUsers'             => $totalUsers,
+            'totalPangkalan'         => $totalPangkalan,
+            'totalPelanggan'         => $totalPelanggan,
+            'totalTransaksiHariIni'  => $totalTransaksiHariIni,
+            'totalTransaksiBulanIni' => $totalTransaksiBulanIni,
+        ];
+
+        return compact('stats', 'serverStatus', 'recentTransactions');
+    }
+
+    /**
+     * Broadcast data dashboard terbaru ke channel superadmin-dashboard.
+     * Dipanggil setiap kali ada transaksi baru/update agar frontend tidak perlu polling.
+     */
+    public static function broadcastDashboard(): void
+    {
+        try {
+            $data = self::buildDashboardData();
+            event(new SuperAdminDashboardUpdated(
+                $data['stats'],
+                $data['serverStatus'],
+                $data['recentTransactions'],
+            ));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal broadcast SuperAdminDashboard: ' . $e->getMessage());
+        }
+    }
+
+    public function dashboard()
+    {
+        $data = self::buildDashboardData();
+
         return Inertia::render('SuperAdmin/Dashboard', [
-            'stats' => [
-                'totalUsers' => $totalUsers,
-                'totalPangkalan' => $totalPangkalan,
-                'totalPelanggan' => $totalPelanggan,
-                'totalTransaksiHariIni' => $totalTransaksiHariIni,
-                'totalTransaksiBulanIni' => $totalTransaksiBulanIni,
-            ],
-            'serverStatus' => $serverStatus,
-            'recentTransactions' => $recentTransactions
+            'stats'              => $data['stats'],
+            'serverStatus'       => $data['serverStatus'],
+            'recentTransactions' => $data['recentTransactions'],
         ]);
     }
 
