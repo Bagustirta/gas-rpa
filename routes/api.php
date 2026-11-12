@@ -15,7 +15,7 @@ use App\Http\Controllers\Api\ApiLpgController;
 */
 
 // Endpoint RPA dengan Keamanan API Key & Rate Limiter
-Route::middleware(['api.key', 'throttle:60,1'])->group(function () {
+Route::middleware(['api.key', 'throttle:1000,1'])->group(function () {
     // Menyajikan daftar pelanggan yang transaksinya siap/perlu dilaporkan ke Pertamina
     Route::get('/nik-siap-lapor', [ApiLpgController::class, 'nikSiapLapor']);
     

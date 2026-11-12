@@ -7,6 +7,8 @@
   <img src="https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Node.js">
   <img src="https://img.shields.io/badge/Puppeteer-40B5A4?style=for-the-badge&logo=puppeteer&logoColor=white" alt="Puppeteer">
   <img src="https://img.shields.io/badge/PM2-2B037A?style=for-the-badge&logo=pm2&logoColor=white" alt="PM2">
+  <img src="https://img.shields.io/badge/Google%20Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white" alt="Gemini AI">
+  <img src="https://img.shields.io/badge/Telegram-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram">
 </p>
 
 ---
@@ -35,6 +37,48 @@ Dilengkapi dengan sistem Antrean Terpusat (*Queue Worker*) dan Keamanan Tingkat 
 *   **Automation Engine:** Puppeteer (Mode *Headless* untuk otomatisasi di belakang layar tanpa mengganggu aktivitas PC).
 *   **Kecerdasan Bot:** Fitur In-House Computer Vision Solver untuk MyPertamina Jigsaw Captcha.
 
+### 3. AI Self-Healing Watchdog (Node.js + Gemini AI + Telegram)
+*   **Watchdog Engine:** `watchdog.js` — daemon *event-driven* yang memantau log error secara real-time menggunakan `fs.watchFile` (tanpa polling agresif).
+*   **AI Diagnosis:** Google Gemini 3.5 Flash Lite digunakan untuk menganalisis error baru yang belum pernah terjadi sebelumnya dan memberikan saran perbaikan otomatis.
+*   **Notifikasi:** Alert instan via Telegram Bot setiap kali terjadi anomali, error kritis, atau *stuck queue*.
+*   **Remote Control:** Perintah Telegram (`/status`, `/restart`, `/test`, `/help`) untuk memantau dan mengontrol sistem dari HP tanpa perlu buka laptop.
+
+---
+
+## Arsitektur Auto-Scaling & Watchdog
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                  Laravel Backend                         │
+│  (Push Event via WebSocket saat job masuk antrian)       │
+└──────────────┬───────────────────────────────────────────┘
+               │ WebSocket Push / HTTP Poll (fallback)
+               ▼
+┌──────────────────────────────┐
+│      rpa-scaler (PM2)        │  ← scaler.js
+│  - Terima sinyal job baru    │
+│  - Sinkronisasi state PM2    │  ← syncActiveWorkers()
+│    (baca pm2 jlist real-time)│
+│  - Spawn/kill rpa-bot-N      │
+└──────────────┬───────────────┘
+               │ Kelola proses
+               ▼
+┌──────────────────────────────┐
+│   rpa-bot-1 ... rpa-bot-N    │  ← bot.js (Puppeteer)
+│   (Auto-scaled berdasarkan   │
+│    jumlah job di antrian)    │
+└──────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────┐
+│               rpa-watchdog (PM2)                          │  ← watchdog.js
+│  - fs.watchFile pada PM2 error log & laravel.log          │
+│  - Deteksi anomali → kirim ke Gemini AI untuk diagnosis   │
+│  - Kirim alert ke Telegram Bot (@gas_rpa_anom_bot)        │
+│  - Terima perintah /status /restart /test /help           │
+│  - Safety net: cek stuck queue setiap 15 menit            │
+└──────────────────────────────────────────────────────────┘
+```
+
 ---
 
 ## Fitur Utama
@@ -49,6 +93,7 @@ Dilengkapi dengan sistem Antrean Terpusat (*Queue Worker*) dan Keamanan Tingkat 
     -   *Stok Kosong:* Otomatis mendeteksi jika stok di portal MyPertamina habis, dan beralih ke pangkalan berikutnya.
     -   *Batas Kuota Bulanan:* Mendeteksi batas limit 4 tabung/bulan.
     -   *Invalid NIK:* Memblokir (nonaktif) status pelanggan lokal secara spesifik hanya jika NIK ditolak/tidak terdaftar di server pusat.
+-   **AI Watchdog (Self-Healing Canggih):** Daemon *event-driven* memantau log error secara real-time. Jika ada bug baru yang terdeteksi, Gemini AI menganalisis error dan memberikan saran perbaikan. Alert otomatis dikirim ke HP via Telegram Bot. Mendukung perintah remote `/status`, `/restart`, `/test`.
 -   **History Preservation (Penyimpanan Riwayat):** Otomatis membersihkan antrean transaksi yang gagal atau kedaluwarsa setiap pergantian bulan/hari, namun secara permanen menyimpan jejak seluruh riwayat transaksi yang sukses.
 
 ---
@@ -92,12 +137,59 @@ Dilengkapi dengan sistem Antrean Terpusat (*Queue Worker*) dan Keamanan Tingkat 
    copy .env.example .env
    ```
    Pastikan `LARAVEL_APP_URL` dan `LPG_API_KEY` sama persis dengan yang di sisi Laravel.
-3. Jalankan PM2 Worker (Contoh: Menjalankan 4 pekerja bayangan):
+
+3. Tambahkan konfigurasi Telegram & Gemini AI di `rpa-bot/.env`:
+   ```env
+   TELEGRAM_BOT_TOKEN=token_bot_telegram_anda
+   TELEGRAM_CHAT_ID=chat_id_anda
+   GEMINI_API_KEY=api_key_gemini_anda
+   ```
+   > Lihat bagian **"Konfigurasi Watchdog AI"** di bawah untuk cara mendapatkan nilai-nilai ini.
+
+4. Jalankan seluruh daemon via `ecosystem.json`:
    ```bash
-   pm2 start bot.js --name "gas-rpa-worker" -i 4
+   # Dari folder root project (bukan rpa-bot/)
+   pm2 startOrRestart ecosystem.json
    pm2 save
    ```
-   Kini bot sudah aktif 24 jam penuh di komputer Anda dan siap menerima antrean dari Laravel!
+   Perintah ini akan menjalankan `rpa-scaler` dan `rpa-watchdog` secara otomatis. Worker `rpa-bot-N` akan di-*spawn* secara dinamis oleh scaler saat ada job masuk.
+
+5. *(Opsional — Windows)* Gunakan `start-server.bat` untuk menjalankan semua layanan sekaligus saat komputer dinyalakan:
+   ```bat
+   start-server.bat
+   ```
+
+### 3. Konfigurasi Watchdog AI (Telegram + Gemini)
+
+Untuk mengaktifkan notifikasi alert dan analisis AI otomatis, ikuti langkah berikut:
+
+#### A. Buat Telegram Bot
+1. Buka Telegram, cari **@BotFather**.
+2. Kirim `/newbot` dan ikuti instruksi.
+3. Salin **token bot** yang diberikan (format: `123456789:AAHxxx...`).
+4. Masukkan token ke `rpa-bot/.env` sebagai `TELEGRAM_BOT_TOKEN`.
+
+#### B. Dapatkan Chat ID
+1. Buka Telegram, cari **@userinfobot**.
+2. Kirim pesan apa saja — bot akan membalas dengan **ID** akun Anda.
+3. Masukkan ID tersebut ke `rpa-bot/.env` sebagai `TELEGRAM_CHAT_ID`.
+
+#### C. Dapatkan Gemini API Key
+1. Kunjungi [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey).
+2. Klik **"Create API Key"** (gratis).
+3. Masukkan ke `rpa-bot/.env` sebagai `GEMINI_API_KEY`.
+
+#### D. Aktifkan Bot
+Buka bot Telegram Anda (`@gas_rpa_anom_bot` atau nama bot yang Anda buat) dan tekan tombol **START**. Tanpa langkah ini, notifikasi tidak akan terkirim ke HP Anda.
+
+#### Perintah Telegram yang Tersedia
+
+| Perintah | Fungsi |
+|----------|--------|
+| `/status` | Lihat status semua proses PM2 secara real-time |
+| `/restart` | Restart semua worker RPA bot |
+| `/test` | Kirim pesan test untuk memastikan alert berfungsi |
+| `/help` | Tampilkan daftar perintah |
 
 ---
 

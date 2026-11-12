@@ -1034,7 +1034,8 @@ function connectWebSocket() {
     });
 
     pusher.connection.bind('error', (err) => {
-        console.error('✗ WebSocket error:', err?.error?.data?.message || JSON.stringify(err));
+        const msg = err?.error?.data?.message || err?.message || err?.error?.message || (typeof err === 'string' ? err : 'Connection error');
+        console.error('✗ WebSocket error:', msg);
     });
 
     pusher.connection.bind('disconnected', () => {
@@ -2692,6 +2693,7 @@ async function run() {
             try { await activeBrowser.close(); } catch (e) {}
             activeBrowser = null;
         }
+        const hadSync = !!activeSyncId;
         if (activeSyncId) {
             await api.patch(`/api/rpa-sync/${activeSyncId}`, {
                 status: 'failed',
@@ -2699,7 +2701,8 @@ async function run() {
             }).catch(() => {});
             activeSyncId = null;
         }
-        return true;
+        await sleep(5000);
+        return hadSync;
     }
 }
 

@@ -87,7 +87,7 @@ function log(msg) {
 }
 
 async function pm2cmd(args) {
-    const { stdout } = await execAsync(`pm2 ${args}`);
+    const { stdout } = await execAsync(`pm2 ${args}`, { windowsHide: true });
     return stdout.trim();
 }
 
@@ -100,6 +100,11 @@ async function fetchQueueStats() {
 
 async function spawnWorker(id) {
     log(`▲ SPAWN  rpa-bot-${id}`);
+    try {
+        await pm2cmd(`delete "rpa-bot-${id}"`);
+    } catch (e) {
+        // Abaikan jika proses belum ada di PM2
+    }
     await pm2cmd(
         `start "${BOT_SCRIPT}" --name "rpa-bot-${id}" --interpreter node ` +
         `--env WORKER_ID=${id} ` +
@@ -154,6 +159,23 @@ async function reconcile(desired) {
 
 // ─── Main Check Logic ─────────────────────────────────────────────────────────
 
+async function syncActiveWorkers() {
+    try {
+        const list = await pm2cmd('jlist');
+        const procs = JSON.parse(list);
+        const onlineBots = procs.filter(p =>
+            /^rpa-bot-\d+$/.test(p.name) && p.pm2_env?.status === 'online'
+        );
+        activeWorkers.clear();
+        for (const p of onlineBots) {
+            const id = parseInt(p.name.replace('rpa-bot-', ''));
+            if (!isNaN(id)) activeWorkers.add(id);
+        }
+    } catch (e) {
+        log(`⚠ Gagal sinkronisasi state PM2: ${e.message}`);
+    }
+}
+
 async function checkAndScale(source = 'fallback') {
     // Cegah concurrent execution
     if (isChecking) {
@@ -163,6 +185,7 @@ async function checkAndScale(source = 'fallback') {
     isChecking = true;
 
     try {
+        await syncActiveWorkers();
         const stats = await fetchQueueStats();
         const desired = Math.min(stats.total_active, MAX_WORKERS);
 

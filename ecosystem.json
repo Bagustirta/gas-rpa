@@ -39,6 +39,13 @@
         "SCALER_CHECK_INTERVAL": "10000",
         "SCALER_IDLE_TIMEOUT": "5"
       }
+    },
+    {
+      "name": "rpa-watchdog",
+      "script": "watchdog.js",
+      "cwd": "d:\\laragon\\www\\gas\\rpa-bot",
+      "interpreter": "node",
+      "autorestart": true
     }
   ]
 }
