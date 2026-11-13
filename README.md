@@ -64,7 +64,3 @@ pm2 save
 ```
 
 Atau jalankan file `start-server.bat` pada Windows.
-
-## Lisensi
-
-MIT
