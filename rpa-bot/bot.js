@@ -930,6 +930,100 @@ function askQuestion(query) {
     }));
 }
 
+/**
+ * Menunggu hingga halaman dashboard MyPertamina selesai memuat data stok asli dari API React
+ * (agar nilai stok sementara '0 Tabung' saat baru reload tidak memicu false-positive Stok Kosong).
+ */
+async function waitForDashboardStockReady(page, maxWaitMs = 6000) {
+    const stepMs = 500;
+    const maxLoops = Math.ceil(maxWaitMs / stepMs);
+    for (let i = 0; i < maxLoops; i++) {
+        try {
+            const state = await page.evaluate(() => {
+                const txt = (document.body ? document.body.textContent : '').toLowerCase();
+                const hasNikInput = Array.from(document.querySelectorAll('input')).some(inp => {
+                    const r = inp.getBoundingClientRect();
+                    return r.width > 0 && r.height > 0 && ((inp.getAttribute('placeholder') || '').toLowerCase().includes('nik') || (inp.getAttribute('placeholder') || '').toLowerCase().includes('16 digit'));
+                });
+                if (hasNikInput) return { ready: true, stock: null };
+
+                const match = txt.match(/stok[\s\S]{0,60}?(\d+)\s*tabung/);
+                if (match) {
+                    const count = parseInt(match[1], 10);
+                    if (count > 0) return { ready: true, stock: count };
+                }
+                return { ready: false, stock: match ? 0 : null };
+            });
+            if (state.ready) return state;
+        } catch (e) {}
+        await sleep(stepMs);
+    }
+    return { ready: false, stock: null };
+}
+
+/**
+ * Verifikasi berlapis apakah stok di portal MyPertamina BENAR-BENAR 0 (habis),
+ * atau hanya false-positive akibat koneksi/API stok React yang belum selesai dimuat.
+ * Mengembalikan true HANYA jika setelah 2x reload penuh & uji buka modal, stok terbukti 0.
+ */
+async function verifyIsStokTrulyEmpty(page, merchantName) {
+    console.log(`🔍 [Verifikasi Stok] Memastikan ulang apakah stok di "${merchantName}" benar-benar 0 atau hanya lag jaringan...`);
+
+    for (let verifyAttempt = 1; verifyAttempt <= 2; verifyAttempt++) {
+        try {
+            console.log(`   -> [Verifikasi ${verifyAttempt}/2] Memuat ulang dashboard MyPertamina dan menunggu data API stok...`);
+            await page.goto(PERTAMINA_URL, { waitUntil: 'networkidle2', timeout: 30000 }).catch(async () => {
+                await page.goto(PERTAMINA_URL, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+            });
+            await sleep(3500);
+
+            const stockState = await waitForDashboardStockReady(page, 5000);
+            if (stockState.stock !== null && stockState.stock > 0) {
+                console.log(`✅ [Anti-False-Positive] Terbukti stok "${merchantName}" masih ada (${stockState.stock} tabung)! Melanjutkan transaksi...`);
+                return false;
+            }
+
+            // Uji langsung dengan menekan tombol "Catat Penjualan" setelah halaman benar-benar tenang
+            const catatBtn = await findButtonByKeywords(page, ['Catat Penjualan']);
+            if (catatBtn) {
+                await catatBtn.click().catch(() => {});
+                for (let w = 0; w < 10; w++) {
+                    await sleep(500);
+                    const modalCheck = await page.evaluate(() => {
+                        const txt = (document.body ? document.body.textContent : '').toLowerCase();
+                        if (txt.includes('stok tabung kosong') || txt.includes('stok tabung yang dapat dijual kosong')) {
+                            return 'empty_popup';
+                        }
+                        const inputs = Array.from(document.querySelectorAll('input'));
+                        const hasNik = inputs.some(input => {
+                            const rect = input.getBoundingClientRect();
+                            return rect.width > 0 && rect.height > 0 && !input.readOnly && !input.disabled;
+                        });
+                        if (hasNik && (txt.includes('masukkan nik') || txt.includes('16 digit') || txt.includes('nik'))) {
+                            return 'nik_open';
+                        }
+                        return 'waiting';
+                    }).catch(() => 'waiting');
+
+                    if (modalCheck === 'nik_open') {
+                        console.log(`✅ [Anti-False-Positive] Modal "Catat Penjualan" berhasil terbuka di percobaan verifikasi ke-${verifyAttempt}! Stok belum habis.`);
+                        return false;
+                    }
+                    if (modalCheck === 'empty_popup') {
+                        console.log(`   -> [Verifikasi ${verifyAttempt}/2] Popup stok kosong masih muncul.`);
+                        break;
+                    }
+                }
+            }
+        } catch (err) {
+            console.log(`   -> [Verifikasi ${verifyAttempt}/2] Kendala saat mengecek ulang: ${err.message}`);
+        }
+    }
+
+    console.log(`🔴 [Verifikasi Stok] Terkonfirmasi 100%: Stok di Pangkalan "${merchantName}" memang sudah 0 (Habis).`);
+    return true;
+}
+
 // Konfigurasi HTTP Client Axios dengan API Key
 const api = axios.create({
     baseURL: LARAVEL_URL,
@@ -1439,8 +1533,9 @@ async function run() {
             }
             console.log(`Nama Pangkalan Terdeteksi: "${merchantName}"`);
 
-            // Tunggu sebentar agar dashboard React merender data stok dengan sempurna
-            await sleep(3000);
+            // Tunggu hingga dashboard React merender data stok dengan sempurna
+            await sleep(2000);
+            await waitForDashboardStockReady(page, 6000);
 
             // Cek apakah stok di dashboard 0 tabung
             let isStokHabis = false;
@@ -1455,6 +1550,11 @@ async function run() {
                 });
             } catch (e) {
                 console.error('Error saat memeriksa stok dashboard:', e.message);
+            }
+
+            if (isStokHabis) {
+                // Verifikasi ulang agar tidak terjebak angka 0 sementara saat API React belum selesai loading
+                isStokHabis = await verifyIsStokTrulyEmpty(page, merchantName);
             }
 
             if (isStokHabis) {
@@ -1626,8 +1726,10 @@ async function run() {
                                 if (!nikInputExist) {
                                     if (retryOpenModal === 1) {
                                         console.log('Membuka kembali modal "Catat Penjualan"...');
+                                        await waitForDashboardStockReady(page, 5000);
                                     } else {
                                         console.log(`🔄 [Self-Healing ${retryOpenModal-1}/2] Mencoba kembali menekan tombol "Catat Penjualan"...`);
+                                        await waitForDashboardStockReady(page, 5000);
                                     }
                                     
                                     const catatPenjualanBtn = await findButtonByKeywords(page, ['Catat Penjualan']);
@@ -1815,18 +1917,7 @@ async function run() {
 
                     // --- STATE STOK KOSONG (Stok Merchant Habis) ---
                     if (searchState === 'stok_kosong') {
-                        console.log(`🔴 Kritis: Stok tabung di portal MyPertamina (${merchantName}) kosong!`);
-                        console.log('Mengirim sinyal stok kosong ke Laravel untuk pangkalan ini...');
-                        try {
-                            await api.post('/api/rpa-sync/stok-kosong', {
-                                akun_pangkalan_id: pangkalan.id
-                            });
-                            console.log('✓ Sinyal dikirim. Sisa transaksi pangkalan ini dibersihkan.');
-                        } catch (e) {
-                            console.error('Gagal mengirim sinyal stok kosong ke Laravel:', e.message);
-                        }
-                        pangkalanStokHabis = true;
-                        if (!pangkalanHabisList.includes(merchantName)) pangkalanHabisList.push(merchantName);
+                        console.log(`⚠️ Mendeteksi indikasi stok kosong pada pencarian NIK di (${merchantName}). Melakukan verifikasi...`);
                         throw new Error('FATAL: STOK_MYPERTAMINA_KOSONG');
                     }
 
@@ -2334,11 +2425,28 @@ async function run() {
                     // --- HANDLE B: LIMIT BULANAN TERLAMPAUI ---
                     if (searchState === 'limit') {
                         console.log('Mendeteksi peringatan batas kewajaran bulan ini terpenuhi.');
+
+                        const tutupBtn = await findButtonByKeywords(page, ['TUTUP', 'BATAL', 'OK', 'KEMBALI']);
+                        if (tutupBtn) {
+                            await tutupBtn.click().catch(() => {});
+                            await sleep(1000);
+                        }
+
+                        const gantiPelangganBtn = await findButtonByKeywords(page, ['Ganti Pelanggan']);
+                        if (gantiPelangganBtn) {
+                            await gantiPelangganBtn.click().catch(() => {});
+                            await sleep(1500);
+                        } else {
+                            await page.goto(PERTAMINA_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
+                            await sleep(2000);
+                            await waitForDashboardStockReady(page, 5000);
+                        }
+
                         await api.post(`/api/gagal-lapor/${trx.id}`, {
                             message: 'Limit batas kewajaran Pertamina'
                         });
                         limitCount++;
-                        await sleep(1500);
+                        await sleep(1000);
                         continue;
                     }
 
@@ -2411,6 +2519,7 @@ async function run() {
                     let isCaptchaSolved = false;
                     let captchaCheckAttempts = 0;
                     let solverTries = 0;
+                    let summaryWaitCount = 0;
 
                     while (!isCaptchaSolved) {
                         // Cari frame captcha secara cerdas (mendukung iframe)
@@ -2455,8 +2564,20 @@ async function run() {
                                     } else if (pageText.includes('gagal') || pageText.includes('error') || pageText.includes('kesalahan') || pageText.includes('tidak berhasil')) {
                                         throw new Error('Transaksi gagal diproses oleh portal Pertamina (Terdeteksi error/kegagalan pada halaman).');
                                     } else {
-                                        isCaptchaSolved = true;
-                                        console.log('✓ Halaman bergeser. Transaksi selesai diproses.');
+                                        // Jangan langsung anggap selesai jika halaman masih di PROSES PENJUALAN!
+                                        // Mungkin iframe Captcha sedang loading lambat atau klik pertama belum terproses.
+                                        summaryWaitCount++;
+                                        if (summaryWaitCount === 4 || summaryWaitCount === 8) {
+                                            console.log(`⏳ [Menunggu Captcha ${summaryWaitCount}/10] Halaman masih di Ringkasan, mencoba klik ulang "PROSES PENJUALAN"...`);
+                                            const retryProsesBtn = await findButtonByKeywords(page, ['PROSES PENJUALAN']);
+                                            if (retryProsesBtn) {
+                                                await retryProsesBtn.click().catch(() => {});
+                                            }
+                                        }
+                                        if (summaryWaitCount >= 10) {
+                                            throw new Error('Halaman Ringkasan Pesanan tidak merespon setelah klik Proses Penjualan (timeout menunggu captcha).');
+                                        }
+                                        await sleep(1000);
                                     }
                                 }
                             }
@@ -2489,10 +2610,15 @@ async function run() {
                     try {
                         await page.goto(PERTAMINA_URL, { waitUntil: 'domcontentloaded' });
                         await sleep(2000);
+                        await waitForDashboardStockReady(page, 5000);
                     } catch (e) { }
 
                 } catch (err) {
-                    console.error(`✗ Gagal memproses NIK ${trx.nik}:`, err.message);
+                    if (err.message && err.message.includes('STOK_MYPERTAMINA_KOSONG')) {
+                        console.log(`ℹ️ Indikasi stok pangkalan habis saat memproses NIK ${trx.nik}. Memverifikasi...`);
+                    } else {
+                        console.error(`✗ Gagal memproses NIK ${trx.nik}:`, err.message);
+                    }
 
                     // --- RECOVERY: Cek apakah dipental ke halaman login ---
                     let isLoginPage = false;
@@ -2534,6 +2660,7 @@ async function run() {
                             try {
                                 await page.goto(PERTAMINA_URL, { waitUntil: 'domcontentloaded' });
                                 await sleep(3000);
+                                await waitForDashboardStockReady(page, 5000);
                             } catch (e) { }
                             i--; // Mundurkan index i agar memproses NIK yang sama di iterasi berikutnya
                             continue;
@@ -2543,7 +2670,18 @@ async function run() {
                     }
 
                     if (err.message.includes('STOK_MYPERTAMINA_KOSONG')) {
-                        console.log('Menerima sinyal Stok Kosong. Melaporkan ke database dan membatalkan sisa antrean pangkalan ini...');
+                        // Verifikasi ulang apakah stok benar-benar 0 atau hanya lag jaringan (false-positive)
+                        const isTrulyEmpty = await verifyIsStokTrulyEmpty(page, merchantName);
+                        if (!isTrulyEmpty) {
+                            trx.stokRetryCount = (trx.stokRetryCount || 0) + 1;
+                            if (trx.stokRetryCount <= 3) {
+                                console.log(`🔄 [Recovery Anti-False-Positive] Stok di "${merchantName}" masih tersedia! Mengulang kembali NIK ${trx.nik} (Percobaan ${trx.stokRetryCount}/3)...`);
+                                i--; // Mundurkan index i agar NIK ini diproses ulang
+                                continue;
+                            }
+                        }
+
+                        console.log('Menerima sinyal Stok Kosong (Terkonfirmasi 0). Melaporkan ke database dan membatalkan sisa antrean pangkalan ini...');
                         pangkalanStokHabis = true;
                         if (!pangkalanHabisList.includes(merchantName)) pangkalanHabisList.push(merchantName);
                         try {

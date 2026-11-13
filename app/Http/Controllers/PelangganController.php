@@ -23,7 +23,8 @@ class PelangganController extends Controller
         $query = Pelanggan::where('user_id', $userId)
             ->withSum(['transaksiGas as total_tabung_bulan_ini' => function ($query) use ($bulan, $tahun) {
                 $query->whereMonth('tanggal_transaksi', $bulan)
-                      ->whereYear('tanggal_transaksi', $tahun);
+                      ->whereYear('tanggal_transaksi', $tahun)
+                      ->whereIn('status_lapor', ['sukses', 'kuota_habis', 'belum_lapor']);
             }], 'jumlah_tabung');
 
         if ($request->filled('search')) {
@@ -43,6 +44,7 @@ class PelangganController extends Controller
                 $subquery = \App\Models\TransaksiGas::whereColumn('pelanggan_id', 'pelanggan.id')
                     ->whereMonth('tanggal_transaksi', $bulan)
                     ->whereYear('tanggal_transaksi', $tahun)
+                    ->whereIn('status_lapor', ['sukses', 'kuota_habis', 'belum_lapor'])
                     ->selectRaw('COALESCE(SUM(jumlah_tabung), 0)');
 
                 if ($sisa === 4) {

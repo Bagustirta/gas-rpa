@@ -201,6 +201,7 @@ class TransaksiGasController extends Controller
         // 1. Weekly Limit (lintas semua pangkalan — 1 tabung/minggu)
         $weeklySum = TransaksiGas::where('pelanggan_id', $pelanggan->id)
             ->whereBetween('tanggal_transaksi', [$startOfWeek, $endOfWeek])
+            ->whereIn('status_lapor', ['sukses', 'kuota_habis', 'belum_lapor'])
             ->sum('jumlah_tabung');
 
         if (($weeklySum + $validated['jumlah_tabung']) > 1) {
@@ -212,6 +213,7 @@ class TransaksiGasController extends Controller
         // 2. Monthly Limit overall
         $monthlySum = TransaksiGas::where('pelanggan_id', $pelanggan->id)
             ->whereBetween('tanggal_transaksi', [$startOfMonth, $endOfMonth])
+            ->whereIn('status_lapor', ['sukses', 'kuota_habis', 'belum_lapor'])
             ->sum('jumlah_tabung');
 
         if (($monthlySum + $validated['jumlah_tabung']) > 4) {
@@ -264,6 +266,7 @@ class TransaksiGasController extends Controller
         $weeklySum = TransaksiGas::where('pelanggan_id', $validated['pelanggan_id'])
             ->where('id', '!=', $transaksiGas->id)
             ->whereBetween('tanggal_transaksi', [$startOfWeek, $endOfWeek])
+            ->whereIn('status_lapor', ['sukses', 'kuota_habis', 'belum_lapor'])
             ->sum('jumlah_tabung');
 
         if (($weeklySum + $validated['jumlah_tabung']) > 1) {
@@ -276,6 +279,7 @@ class TransaksiGasController extends Controller
         $monthlySum = TransaksiGas::where('pelanggan_id', $validated['pelanggan_id'])
             ->where('id', '!=', $transaksiGas->id)
             ->whereBetween('tanggal_transaksi', [$startOfMonth, $endOfMonth])
+            ->whereIn('status_lapor', ['sukses', 'kuota_habis', 'belum_lapor'])
             ->sum('jumlah_tabung');
 
         if (($monthlySum + $validated['jumlah_tabung']) > 4) {
@@ -516,133 +520,168 @@ class TransaksiGasController extends Controller
         $pangkalanId    = $validated['akun_pangkalan_id'];
 
         // Ambil pelanggan aktif milik user
-        $pelangganList = Pelanggan::where('status', true)
+        $allPelanggan = Pelanggan::where('status', true)
             ->where('user_id', Auth::id())
             ->get();
 
-        if ($pelangganList->isEmpty()) {
+        if ($allPelanggan->isEmpty()) {
             return redirect()->route('transaksi-gas.index')->with('error', 'Tidak ada pelanggan aktif yang terdaftar di akun Anda.');
         }
 
-        // 1. Generate semua minggu di bulan ini (ISO Week: Senin - Minggu)
-        $startOfMonth = $baseDate->copy()->startOfMonth();
-        $endOfMonth = $baseDate->copy()->endOfMonth();
-
-        $weeks = [];
-        $current = $startOfMonth->copy();
-        while ($current->lte($endOfMonth)) {
-            $sOfWeek = $current->copy()->startOfWeek();
-            $eOfWeek = $current->copy()->endOfWeek();
-            
-            $weekKey = $sOfWeek->format('Y-m-d') . '_' . $eOfWeek->format('Y-m-d');
-            if (!isset($weeks[$weekKey])) {
-                $intersectStart = $sOfWeek->copy()->max($startOfMonth);
-                $intersectEnd = $eOfWeek->copy()->min($endOfMonth);
-                
-                $weeks[$weekKey] = [
-                    'query_start' => $sOfWeek,
-                    'query_end' => $eOfWeek,
-                    'trx_start' => $intersectStart,
-                    'trx_end' => $intersectEnd,
-                ];
-            }
-            $current->addDay();
-        }
-
-        // 2. Urutkan minggu: prioritaskan minggu dari tanggal_transaksi yang dipilih user, baru minggu lainnya
-        $selectedWeekKey = $baseDate->copy()->startOfWeek()->format('Y-m-d') . '_' . $baseDate->copy()->endOfWeek()->format('Y-m-d');
-        
-        $prioritizedWeeks = [];
-        if (isset($weeks[$selectedWeekKey])) {
-            $prioritizedWeeks[] = $weeks[$selectedWeekKey];
-            unset($weeks[$selectedWeekKey]);
-        }
-        foreach ($weeks as $w) {
-            $prioritizedWeeks[] = $w;
-        }
-
-        // 3. Distribusikan tabung (1 per minggu per pelanggan, max 4 per bulan, maks 1 per hari lintas pangkalan)
-        $allocated = 0;
-        $createdCount = 0;
-
-        $customerMonthlyTotals = [];
-        foreach ($pelangganList as $p) {
-            $customerMonthlyTotals[$p->id] = $p->totalTabungBulanIni($bulan, $tahun);
-        }
-
-        $existingTrxDates = TransaksiGas::whereMonth('tanggal_transaksi', $bulan)
-            ->whereYear('tanggal_transaksi', $tahun)
-            ->select('pelanggan_id', 'tanggal_transaksi')
-            ->get()
-            ->groupBy('pelanggan_id')
-            ->map(function ($trxs) {
-                return $trxs->map(fn ($t) => \Carbon\Carbon::parse($t->tanggal_transaksi)->toDateString())
-                    ->unique()
-                    ->values()
-                    ->toArray();
-            })
+        // Ambil daftar pelanggan yang pernah ditandai 'belum_17_tahun' pada tahun ini
+        $underageIdsFromTrx = TransaksiGas::whereYear('tanggal_transaksi', $tahun)
+            ->where('status_lapor', 'belum_17_tahun')
+            ->pluck('pelanggan_id')
+            ->unique()
+            ->flip()
             ->toArray();
 
-        $pendingTransactions = [];
-        $newTrxDates = []; 
-        $newTrxDatesForPangkalan = []; 
+        // Filter hanya pelanggan yang sudah berusia >= 17 tahun pada tanggal transaksi
+        $pelangganList = $allPelanggan->filter(function (Pelanggan $p) use ($baseDate, $underageIdsFromTrx) {
+            if (isset($underageIdsFromTrx[$p->id])) {
+                return false;
+            }
+            return $p->isUsiaCukup($baseDate);
+        })->values();
 
-        foreach ($prioritizedWeeks as $week) {
-            $weekKey = $week['query_start']->format('Y-m-d') . '_' . $week['query_end']->format('Y-m-d');
-            
+        if ($pelangganList->isEmpty()) {
+            return redirect()->route('transaksi-gas.index')->with('error', 'Tidak ada pelanggan aktif berusia 17 tahun ke atas yang memenuhi syarat.');
+        }
+
+        $pelangganIds = $pelangganList->pluck('id')->toArray();
+
+        // Rentang minggu dari tanggal_transaksi yang dipilih user (Senin - Minggu)
+        $selectedWeekStart = $baseDate->copy()->startOfWeek();
+        $selectedWeekEnd   = $baseDate->copy()->endOfWeek();
+        $targetDate        = $baseDate->copy();
+        $dStr              = $targetDate->toDateString();
+
+        // Ambil seluruh transaksi valid bulan ini dalam 1 query (hindari N+1 query)
+        $validStatuses = ['sukses', 'kuota_habis', 'belum_lapor'];
+        $monthlyTrxs = TransaksiGas::whereIn('pelanggan_id', $pelangganIds)
+            ->whereMonth('tanggal_transaksi', $bulan)
+            ->whereYear('tanggal_transaksi', $tahun)
+            ->whereIn('status_lapor', $validStatuses)
+            ->select('pelanggan_id', 'jumlah_tabung', 'tanggal_transaksi')
+            ->get();
+
+        // Ambil juga transaksi pada minggu berjalan jika lintas bulan (misal awal bulan)
+        $weeklyTrxs = TransaksiGas::whereIn('pelanggan_id', $pelangganIds)
+            ->whereBetween('tanggal_transaksi', [$selectedWeekStart, $selectedWeekEnd])
+            ->whereIn('status_lapor', $validStatuses)
+            ->select('pelanggan_id', 'jumlah_tabung', 'tanggal_transaksi')
+            ->get();
+
+        $customerMonthlyTotals = array_fill_keys($pelangganIds, 0);
+        $existingTrxDates = [];
+
+        foreach ($monthlyTrxs as $t) {
+            $customerMonthlyTotals[$t->pelanggan_id] = ($customerMonthlyTotals[$t->pelanggan_id] ?? 0) + (int) $t->jumlah_tabung;
+            $dateKey = \Carbon\Carbon::parse($t->tanggal_transaksi)->toDateString();
+            $existingTrxDates[$t->pelanggan_id][$dateKey] = true;
+        }
+
+        $customerWeeklyTotals = array_fill_keys($pelangganIds, 0);
+        foreach ($weeklyTrxs as $t) {
+            $customerWeeklyTotals[$t->pelanggan_id] = ($customerWeeklyTotals[$t->pelanggan_id] ?? 0) + (int) $t->jumlah_tabung;
+            $dateKey = \Carbon\Carbon::parse($t->tanggal_transaksi)->toDateString();
+            $existingTrxDates[$t->pelanggan_id][$dateKey] = true;
+        }
+
+        // Helper untuk mengurutkan kandidat secara merata berdasarkan tier kuota:
+        // Tier 0 (0/4) -> Tier 1 (1/4) -> Tier 2 (2/4) -> Tier 3 (3/4)
+        // Di dalam masing-masing tier tetap di-shuffle agar urutan pelanggan acak & adil.
+        $sortCandidatesByQuotaTier = function (array $candidates) use (&$customerMonthlyTotals): array {
+            $tiers = [0 => [], 1 => [], 2 => [], 3 => []];
+            foreach ($candidates as $p) {
+                $used = min(3, max(0, (int) ($customerMonthlyTotals[$p->id] ?? 0)));
+                $tiers[$used][] = $p;
+            }
+
+            $sorted = [];
+            foreach ([0, 1, 2, 3] as $tier) {
+                if (!empty($tiers[$tier])) {
+                    shuffle($tiers[$tier]);
+                    foreach ($tiers[$tier] as $p) {
+                        $sorted[] = $p;
+                    }
+                }
+            }
+            return $sorted;
+        };
+
+        $allocated = 0;
+        $createdCount = 0;
+        $pendingTransactions = [];
+        $allocatedTodayPelanggan = [];
+
+        // TAHAP 1 (Utama): Pelanggan yang BELUM beli di minggu ini (< 1 tabung minggu ini)
+        // dan belum punya transaksi di tanggal $dStr, diurutkan dari 0/4 -> 1/4 -> 2/4 -> 3/4.
+        $stage1Candidates = [];
+        foreach ($pelangganList as $p) {
+            if (($customerMonthlyTotals[$p->id] ?? 0) >= 4) {
+                continue;
+            }
+            if (($customerWeeklyTotals[$p->id] ?? 0) >= 1) {
+                continue;
+            }
+            if (!empty($existingTrxDates[$p->id][$dStr])) {
+                continue;
+            }
+            $stage1Candidates[] = $p;
+        }
+
+        $stage1Sorted = $sortCandidatesByQuotaTier($stage1Candidates);
+
+        foreach ($stage1Sorted as $p) {
             if ($allocated >= $totalTarget) {
                 break;
             }
 
-            // Tanggal transaksi selalu sesuai tanggal yang dipilih user di form.
-            $targetDate = $baseDate->copy();
-            $dStr = $targetDate->toDateString();
+            $waktuTransaksi = $targetDate->copy()->setTimeFromTimeString(now()->toTimeString());
+            $pendingTransactions[] = [
+                'pelanggan_id' => $p->id,
+                'akun_pangkalan_id' => $pangkalanId,
+                'jumlah_tabung' => 1,
+                'tanggal_transaksi' => $waktuTransaksi,
+                'dilaporkan_pertamina' => false,
+                'status_lapor' => 'belum_lapor',
+            ];
 
+            $customerMonthlyTotals[$p->id]++;
+            $customerWeeklyTotals[$p->id]++;
+            $existingTrxDates[$p->id][$dStr] = true;
+            $allocatedTodayPelanggan[$p->id] = true;
+            $allocated++;
+            $createdCount++;
+        }
 
-            $candidates = [];
+        // TAHAP 2 (Fallback): Jika target tabung masih sisa (jumlah pelanggan yang belum beli minggu ini kurang),
+        // ambil pelanggan yang masih < 4 tabung bulan ini dan belum dapat transaksi di hari ini ($dStr),
+        // tetap diprioritaskan dari kuota terkecil (0/4 -> 1/4 -> 2/4 -> 3/4).
+        if ($allocated < $totalTarget) {
+            $stage2Candidates = [];
             foreach ($pelangganList as $p) {
-                if ($customerMonthlyTotals[$p->id] >= 4) {
+                if (!empty($allocatedTodayPelanggan[$p->id])) {
                     continue;
                 }
-
-                // Cek mingguan lintas semua pangkalan (1 tabung/minggu total)
-                $weeklySum = TransaksiGas::where('pelanggan_id', $p->id)
-                    ->whereBetween('tanggal_transaksi', [$week['query_start'], $week['query_end']])
-                    ->sum('jumlah_tabung');
-
-                $newWeeklySum = $newTrxDatesForPangkalan[$p->id][$weekKey] ?? 0;
-
-                if (($weeklySum + $newWeeklySum) >= 1) {
+                if (($customerMonthlyTotals[$p->id] ?? 0) >= 4) {
                     continue;
                 }
-
-                $isFree = !in_array($dStr, $existingTrxDates[$p->id] ?? []) 
-                    && !in_array($dStr, $newTrxDates[$p->id] ?? []);
-
-                if ($isFree) {
-                    $candidates[] = $p;
+                if (!empty($existingTrxDates[$p->id][$dStr])) {
+                    continue;
                 }
+                $stage2Candidates[] = $p;
             }
 
-            shuffle($candidates);
+            $stage2Sorted = $sortCandidatesByQuotaTier($stage2Candidates);
 
-            foreach ($candidates as $p) {
+            foreach ($stage2Sorted as $p) {
                 if ($allocated >= $totalTarget) {
                     break;
                 }
 
-                if ($customerMonthlyTotals[$p->id] >= 4) {
-                    continue;
-                }
-
-                if (in_array($dStr, $newTrxDates[$p->id] ?? [])) {
-                    continue;
-                }
-
-                // Tanggal transaksi menggunakan tanggal yang dipilih user langsung + Jam Saat Ini (On-Point)
                 $waktuTransaksi = $targetDate->copy()->setTimeFromTimeString(now()->toTimeString());
-
-                // Masukkan ke antrean transaksi tertunda terlebih dahulu
                 $pendingTransactions[] = [
                     'pelanggan_id' => $p->id,
                     'akun_pangkalan_id' => $pangkalanId,
@@ -653,14 +692,14 @@ class TransaksiGasController extends Controller
                 ];
 
                 $customerMonthlyTotals[$p->id]++;
-                $newTrxDates[$p->id][] = $dStr;
-                $newTrxDatesForPangkalan[$p->id][$weekKey] = ($newTrxDatesForPangkalan[$p->id][$weekKey] ?? 0) + 1;
+                $existingTrxDates[$p->id][$dStr] = true;
+                $allocatedTodayPelanggan[$p->id] = true;
                 $allocated++;
                 $createdCount++;
             }
         }
 
-        // Kunci Pengacakan Total: Scramble seluruh antrean transaksi sebelum disimpan ke DB
+        // Acak urutan eksekusi di dalam batch yang sudah terpilih agar urutan input ke Pertamina terlihat natural
         shuffle($pendingTransactions);
 
         foreach ($pendingTransactions as $trxData) {

@@ -21,9 +21,8 @@ rpa-bot/node_modules/
 rpa-bot/user_data/
 rpa-bot/debug-*.png
 rpa-bot/error-*.png
+rpa-bot/update_data_form.html
 debug-*.png
 error-*.png
+update_data_form.html
 *.vbs
-test_pelanggan.php
-update_timestamps.php
-query

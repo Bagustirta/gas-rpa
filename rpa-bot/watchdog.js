@@ -143,13 +143,13 @@ function setupLogWatcher(filePath, source) {
 
             const newContent = buffer.toString('utf8');
 
-            // Pola error fatal yang perlu perhatian
+            // Pola error fatal yang perlu perhatian (kecuali sinyal operasional STOK_MYPERTAMINA_KOSONG)
             const errorPatterns = [
                 /TypeError: [^\n]+/i,
                 /ReferenceError: [^\n]+/i,
                 /SyntaxError: [^\n]+/i,
                 /Request failed with status code 429/i,
-                /FATAL: [^\n]+/i,
+                /FATAL: (?!STOK_MYPERTAMINA_KOSONG)[^\n]+/i,
                 /UnhandledPromiseRejection[^\n]*/i,
                 /SQLSTATE\[[0-9A-Z]+\]: [^\n]+/i
             ];

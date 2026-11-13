@@ -40,7 +40,7 @@ class ApiLpgController extends Controller
                   ->where(function ($sub) use ($bulan, $tahun) {
                       $subquery = TransaksiGas::selectRaw('COALESCE(SUM(jumlah_tabung), 0)')
                           ->whereColumn('pelanggan_id', 'pelanggan.id')
-                          ->where('status_lapor', 'sukses')
+                          ->whereIn('status_lapor', ['sukses', 'kuota_habis'])
                           ->whereMonth('tanggal_transaksi', $bulan)
                           ->whereYear('tanggal_transaksi', $tahun);
                       
@@ -107,7 +107,7 @@ class ApiLpgController extends Controller
                   ->where(function ($sub) use ($bulan, $tahun) {
                       $subquery = TransaksiGas::selectRaw('COALESCE(SUM(jumlah_tabung), 0)')
                           ->whereColumn('pelanggan_id', 'pelanggan.id')
-                          ->where('status_lapor', 'sukses')
+                          ->whereIn('status_lapor', ['sukses', 'kuota_habis'])
                           ->whereMonth('tanggal_transaksi', $bulan)
                           ->whereYear('tanggal_transaksi', $tahun);
                       
@@ -294,6 +294,7 @@ class ApiLpgController extends Controller
                 'transaksiGas as total_tabung' => fn ($q) => $q
                     ->whereMonth('tanggal_transaksi', $bulan)
                     ->whereYear('tanggal_transaksi', $tahun)
+                    ->whereIn('status_lapor', ['sukses', 'kuota_habis', 'belum_lapor'])
             ], 'jumlah_tabung')
             ->orderBy('nik')
             ->get()

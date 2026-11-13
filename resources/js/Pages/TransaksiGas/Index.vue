@@ -85,94 +85,122 @@
         </div>
       </div>
 
-      <!-- RPA Progress Card (Mobile Optimized & Carousel) -->
-      <div v-if="page.props.activeSync" class="bg-indigo-600 rounded-2xl p-4 md:p-5 shadow-lg shadow-indigo-200 text-white relative flex flex-col md:flex-row justify-between items-start md:items-center gap-4 group">
-        <!-- SVG background pattern -->
-        <div class="absolute inset-0 opacity-10 pointer-events-none rounded-2xl overflow-hidden">
-          <svg width="100%" height="100%" fill="none"><pattern id="pattern-circles" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="2" fill="currentColor"></circle></pattern><rect x="0" y="0" width="100%" height="100%" fill="url(#pattern-circles)"></rect></svg>
-        </div>
-        
-        <div class="relative z-10 w-full md:w-auto text-center md:text-left flex-shrink-0">
-           <h3 class="font-bold text-lg text-white mb-0.5">
-             Progres Lapor Pertamina
-             <span v-if="rpaSlides.length > 1" class="ml-2 px-2 py-0.5 rounded-full bg-white/20 text-xs font-bold">{{ activeSlide === 0 ? 'Global' : rpaSlides[activeSlide].nama_pangkalan }}</span>
-           </h3>
-           <p v-if="rpaSummary.current_pangkalan && activeSlide === 0" class="text-indigo-200 text-xs font-medium">
-              Sedang memproses: <span class="font-bold text-white">{{ rpaSummary.current_pangkalan }}</span>
-           </p>
-           <p v-else-if="activeSlide > 0" class="text-indigo-200 text-xs font-medium">
-              Rincian pangkalan khusus
-           </p>
-           <p v-else class="text-indigo-200 text-xs font-medium">
-              Mempersiapkan Pelaporan Otomatis...
-           </p>
-        </div>
-        
-        <div class="relative z-10 flex flex-wrap items-center justify-center md:justify-end gap-2 w-full overflow-hidden hide-scrollbar"
-             @touchstart="onTouchStart" 
-             @touchend="onTouchEnd"
-             @mouseenter="pauseSlideShow"
-             @mouseleave="resumeSlideShow">
-           
-           <button v-if="rpaSlides.length > 1" @click="handleSwipeRight" class="absolute left-0 top-1/2 -translate-y-1/2 -ml-2 p-1.5 rounded-full bg-indigo-800/50 hover:bg-indigo-800 text-white shadow-md z-20 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
-           </button>
+      <!-- RPA Progress Card (Sederhana, Jelas & Mudah Dibaca) -->
+      <div
+        v-if="page.props.activeSync && rpaSlides[activeSlide]"
+        class="bg-white border border-slate-300 rounded-2xl p-4 md:p-5 shadow-sm space-y-3 select-none"
+        :class="{ 'cursor-grab active:cursor-grabbing': rpaSlides.length > 1 }"
+        @touchstart="onTouchStart"
+        @touchend="onTouchEnd"
+        @mousedown="onMouseDown"
+        @mouseup="onMouseUp"
+        @mouseenter="pauseSlideShow"
+        @mouseleave="resumeSlideShow"
+      >
+        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+          <!-- Kiri: Judul & Badge Pangkalan -->
+          <div class="w-full lg:w-auto text-center lg:text-left">
+            <div class="flex flex-wrap items-center justify-center lg:justify-start gap-2 mb-1">
+              <h3 class="font-bold text-lg text-slate-900">
+                Progres Lapor Pertamina
+              </h3>
 
-           <div class="flex flex-wrap items-center justify-center md:justify-end gap-2 w-full transition-all duration-300">
-             <!-- Blok Sukses -->
-             <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl px-4 py-3 flex flex-col items-center justify-center min-w-[85px]">
-                <div class="flex items-center gap-1.5 mb-0.5">
-                   <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                   <span class="text-xs uppercase tracking-wider font-bold text-indigo-100">Sukses</span>
-                </div>
-                <span class="text-3xl font-black text-emerald-400 drop-shadow-sm">{{ rpaSlides[activeSlide].sukses }}</span>
-             </div>
-             
-             <!-- Blok Limit -->
-             <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl px-4 py-3 flex flex-col items-center justify-center min-w-[85px]">
-                <div class="flex items-center gap-1.5 mb-0.5">
-                   <svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                   <span class="text-xs uppercase tracking-wider font-bold text-indigo-100">Limit</span>
-                </div>
-                <span class="text-3xl font-black text-blue-400 drop-shadow-sm">{{ rpaSlides[activeSlide].kuota_habis || 0 }}</span>
-             </div>
-             
-             <!-- Blok Antre -->
-             <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl px-4 py-3 flex flex-col items-center justify-center min-w-[85px]">
-                <div class="flex items-center gap-1.5 mb-0.5">
-                   <svg class="w-4 h-4 text-amber-300 animate-spin-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 11H19.21"></path></svg>
-                   <span class="text-xs uppercase tracking-wider font-bold text-indigo-100">Antre</span>
-                </div>
-                <span class="text-3xl font-black text-amber-300 drop-shadow-sm" :class="{ 'animate-pulse': rpaSlides[activeSlide].belum_lapor > 0 }">{{ rpaSlides[activeSlide].belum_lapor }}</span>
-             </div>
-             
-             <!-- Blok Gagal -->
-             <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl px-4 py-3 flex flex-col items-center justify-center min-w-[85px]">
-                <div class="flex items-center gap-1.5 mb-0.5">
-                   <svg class="w-4 h-4 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                   <span class="text-xs uppercase tracking-wider font-bold text-indigo-100">Gagal</span>
-                </div>
-                <span class="text-3xl font-black text-rose-400 drop-shadow-sm">{{ rpaSlides[activeSlide].gagal }}</span>
-             </div>
-             
-             <!-- Blok Total -->
-             <div class="flex-1 md:flex-none bg-indigo-700/50 border border-indigo-500/50 rounded-xl px-4 py-3 flex flex-col items-center justify-center min-w-[85px]">
-                <div class="flex items-center gap-1.5 mb-0.5">
-                   <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                   <span class="text-xs uppercase tracking-wider font-bold text-indigo-100">Total</span>
-                </div>
-                <span class="text-3xl font-black text-white drop-shadow-sm">{{ rpaSlides[activeSlide].total }}</span>
-             </div>
-           </div>
+              <button
+                v-if="rpaSlides.length > 1"
+                type="button"
+                @click.stop="handleSwipeLeft"
+                title="Klik untuk ganti tampilan pangkalan"
+                class="px-3 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 text-xs sm:text-sm font-bold transition-colors cursor-pointer"
+              >
+                {{ activeSlide === 0 ? 'Semua Pangkalan' : rpaSlides[activeSlide].nama_pangkalan }}
+              </button>
+            </div>
 
-           <button v-if="rpaSlides.length > 1" @click="handleSwipeLeft" class="absolute right-0 top-1/2 -translate-y-1/2 -mr-2 p-1.5 rounded-full bg-indigo-800/50 hover:bg-indigo-800 text-white shadow-md z-20 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
-           </button>
-           
-           <!-- Carousel Dots Indicator -->
-           <div v-if="rpaSlides.length > 1" class="absolute -bottom-2 left-1/2 -translate-x-1/2 flex space-x-1.5">
-              <button v-for="(_, i) in rpaSlides" :key="i" @click="goToSlide(i)" :class="activeSlide === i ? 'w-4 bg-white' : 'w-1.5 bg-white/40'" class="h-1.5 rounded-full transition-all duration-300"></button>
-           </div>
+            <p v-if="rpaSummary.current_pangkalan && activeSlide === 0" class="text-slate-600 text-sm font-medium">
+              Sedang memproses: <span class="font-bold text-slate-900">{{ rpaSummary.current_pangkalan }}</span>
+            </p>
+            <p v-else-if="activeSlide > 0" class="text-slate-600 text-sm font-medium">
+              {{ rpaSummary.current_pangkalan === rpaSlides[activeSlide].nama_pangkalan ? 'Sedang diproses saat ini' : 'Rincian laporan pangkalan' }}
+            </p>
+            <p v-else class="text-slate-600 text-sm font-medium">
+              Mempersiapkan pelaporan otomatis...
+            </p>
+          </div>
+
+          <!-- Kanan: 5 Kotak Angka Besar & Jelas -->
+          <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 w-full lg:w-auto">
+            <!-- Blok Sukses -->
+            <div class="bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-3 flex flex-col items-center justify-center min-w-[95px]">
+              <div class="flex items-center gap-1.5 mb-1">
+                <svg class="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                </svg>
+                <span class="text-xs uppercase font-bold text-emerald-800">Sukses</span>
+              </div>
+              <span class="text-3xl font-black text-emerald-600">{{ rpaSlides[activeSlide].sukses }}</span>
+            </div>
+
+            <!-- Blok Limit -->
+            <div class="bg-blue-50 border border-blue-300 rounded-xl px-4 py-3 flex flex-col items-center justify-center min-w-[95px]">
+              <div class="flex items-center gap-1.5 mb-1">
+                <svg class="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span class="text-xs uppercase font-bold text-blue-800">Limit</span>
+              </div>
+              <span class="text-3xl font-black text-blue-600">{{ rpaSlides[activeSlide].kuota_habis || 0 }}</span>
+            </div>
+
+            <!-- Blok Antre -->
+            <div class="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 flex flex-col items-center justify-center min-w-[95px]">
+              <div class="flex items-center gap-1.5 mb-1">
+                <svg class="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="text-xs uppercase font-bold text-amber-800">Antre</span>
+              </div>
+              <span class="text-3xl font-black text-amber-600">{{ rpaSlides[activeSlide].belum_lapor }}</span>
+            </div>
+
+            <!-- Blok Gagal -->
+            <div class="bg-rose-50 border border-rose-300 rounded-xl px-4 py-3 flex flex-col items-center justify-center min-w-[95px]">
+              <div class="flex items-center gap-1.5 mb-1">
+                <svg class="w-4 h-4 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <span class="text-xs uppercase font-bold text-rose-800">Gagal</span>
+              </div>
+              <span class="text-3xl font-black text-rose-600">{{ rpaSlides[activeSlide].gagal }}</span>
+            </div>
+
+            <!-- Blok Total -->
+            <div class="col-span-2 sm:col-span-1 bg-slate-100 border border-slate-300 rounded-xl px-4 py-3 flex flex-col items-center justify-center min-w-[95px]">
+              <div class="flex items-center gap-1.5 mb-1">
+                <svg class="w-4 h-4 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span class="text-xs uppercase font-bold text-slate-700">Total</span>
+              </div>
+              <span class="text-3xl font-black text-slate-900">{{ rpaSlides[activeSlide].total }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Indikator Slideshow (* * *) di Bawah -->
+        <div v-if="rpaSlides.length > 1" class="flex items-center justify-center gap-1 pt-1">
+          <button
+            v-for="(slide, i) in rpaSlides"
+            :key="i"
+            type="button"
+            @click.stop="goToSlide(i)"
+            :title="i === 0 ? 'Semua Pangkalan' : slide.nama_pangkalan"
+            class="p-1.5 flex items-center justify-center cursor-pointer"
+          >
+            <span
+              :class="activeSlide === i ? 'w-6 bg-indigo-600' : 'w-2.5 bg-slate-300 hover:bg-slate-400'"
+              class="h-2.5 rounded-full transition-all duration-300 block"
+            ></span>
+          </button>
         </div>
       </div>
 
@@ -767,10 +795,36 @@ const rpaSlides = computed(() => {
   return slides;
 });
 
-// Fitur Geser (Swipe) untuk Mobile & Auto Slide
+// Fitur Geser (Swipe) untuk Mobile & Auto-Follow Pangkalan Aktif
 const touchStartX = ref(0);
 const touchEndX = ref(0);
+const isManualOverride = ref(false);
 let slideInterval = null;
+let manualHoldTimeout = null;
+
+const syncToActivePangkalan = () => {
+  if (isManualOverride.value) return;
+  const currentName = rpaSummary.value?.current_pangkalan;
+  if (currentName && rpaSlides.value.length > 1) {
+    const idx = rpaSlides.value.findIndex((s, i) => i > 0 && s.nama_pangkalan === currentName);
+    if (idx !== -1) {
+      activeSlide.value = idx;
+      return;
+    }
+  }
+  if (activeSlide.value >= rpaSlides.value.length) {
+    activeSlide.value = 0;
+  }
+};
+
+const markManualInteraction = () => {
+  isManualOverride.value = true;
+  if (manualHoldTimeout) clearTimeout(manualHoldTimeout);
+  manualHoldTimeout = setTimeout(() => {
+    isManualOverride.value = false;
+    syncToActivePangkalan();
+  }, 10000); // Tahan pilihan manual selama 10 detik sebelum kembali ke pangkalan yang sedang diproses
+};
 
 const onTouchStart = (e) => {
   touchStartX.value = e.changedTouches[0].screenX;
@@ -779,6 +833,17 @@ const onTouchStart = (e) => {
 
 const onTouchEnd = (e) => {
   touchEndX.value = e.changedTouches[0].screenX;
+  handleSwipe();
+  resumeSlideShow();
+};
+
+const onMouseDown = (e) => {
+  touchStartX.value = e.screenX;
+  pauseSlideShow();
+};
+
+const onMouseUp = (e) => {
+  touchEndX.value = e.screenX;
   handleSwipe();
   resumeSlideShow();
 };
@@ -795,20 +860,17 @@ const handleSwipe = () => {
 
 const handleSwipeLeft = () => {
   activeSlide.value = activeSlide.value < rpaSlides.value.length - 1 ? activeSlide.value + 1 : 0;
-  pauseSlideShow();
-  resumeSlideShow();
+  markManualInteraction();
 };
 
 const handleSwipeRight = () => {
   activeSlide.value = activeSlide.value > 0 ? activeSlide.value - 1 : rpaSlides.value.length - 1;
-  pauseSlideShow();
-  resumeSlideShow();
+  markManualInteraction();
 };
 
 const goToSlide = (index) => {
   activeSlide.value = index;
-  pauseSlideShow();
-  resumeSlideShow();
+  markManualInteraction();
 };
 
 const pauseSlideShow = () => {
@@ -817,16 +879,20 @@ const pauseSlideShow = () => {
 
 const resumeSlideShow = () => {
   pauseSlideShow();
-  if (rpaSlides.value.length > 1) {
+  // Jika belum ada pangkalan aktif spesifik namun ada banyak slide, gilir perlahan tiap 8 detik
+  if (rpaSlides.value.length > 1 && !rpaSummary.value?.current_pangkalan) {
     slideInterval = setInterval(() => {
-      activeSlide.value = activeSlide.value < rpaSlides.value.length - 1 ? activeSlide.value + 1 : 0;
-    }, 4000); // Ganti tiap 4 detik
+      if (!isManualOverride.value) {
+        activeSlide.value = activeSlide.value < rpaSlides.value.length - 1 ? activeSlide.value + 1 : 0;
+      }
+    }, 8000);
   }
 };
 
-// Start slideshow if multiple slides exist
-watch(rpaSlides, (newVal) => {
-  if (newVal.length > 1) {
+// Otomatis arahkan slide ke pangkalan yang sedang diproses
+watch([rpaSlides, () => rpaSummary.value?.current_pangkalan], () => {
+  syncToActivePangkalan();
+  if (rpaSlides.value.length > 1 && !rpaSummary.value?.current_pangkalan) {
     resumeSlideShow();
   } else {
     pauseSlideShow();
